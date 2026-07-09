@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VISUALIZADOR DE DATOS METEOROLOGICOS</title>
+  <link rel="icon" href="logoM.png">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      background: #eef3f7;
+      color: #002b6f;
+    }
+
+    main {
+      width: min(1380px, calc(100% - 20px));
+      margin: 10px auto;
+    }
+
+    .panel {
+      background: #ffffff;
+      padding: 12px;
+      border: 1px solid #dce5ee;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      box-shadow: 0 8px 24px rgba(0, 43, 111, 0.10);
+    }
+
+    .encabezado-titulo {
+      display: grid;
+      grid-template-columns: 176px minmax(260px, 1fr);
+      align-items: center;
+      gap: 20px;
+      min-width: 500px;
+      text-align: center;
+    }
+
+    .logo-titulo {
+      width: 176px;
+      height: 176px;
+      object-fit: contain;
+      flex: 0 0 auto;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.2vw, 2rem);
+      font-weight: 800;
+      line-height: 1.2;
+      letter-spacing: 0;
+      color: #002b6f;
+    }
+
+    .barra-controles {
+      display: grid;
+      grid-template-columns: minmax(500px, 0.95fr) minmax(520px, 1fr) max-content;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .formulario {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(110px, 1fr));
+      gap: 10px;
+      align-items: center;
+      align-self: center;
+      min-width: 0;
+    }
+
+    .boton-mapa {
+      width: min(260px, 100%);
+      justify-self: center;
+      grid-column: 1 / -1;
+    }
+
+    .enlace-mapa {
+      display: none;
+      justify-self: center;
+      grid-column: 1 / -1;
+      color: #002b6f;
+      font-size: 14px;
+      font-weight: 800;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .enlace-mapa.visible {
+      display: inline-block;
+    }
+
+    .encuadre {
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 10px;
+      align-items: stretch;
+      align-self: center;
+      min-width: max-content;
+    }
+
+    .campo {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+      justify-content: center;
+    }
+
+    label {
+      font-size: 14px;
+      font-weight: 800;
+      color: #002b6f;
+    }
+
+    input,
+    select,
+    button {
+      width: 100%;
+      min-width: 0;
+      min-height: 40px;
+      padding: 8px 10px;
+      font-size: 15px;
+      border-radius: 6px;
+    }
+
+    input,
+    select {
+      border: 1px solid #cbd5df;
+      background: #fff;
+      color: #002b6f;
+    }
+
+    input:focus,
+    select:focus,
+    button:focus-visible {
+      outline: 3px solid rgba(11, 114, 185, 0.25);
+      outline-offset: 2px;
+    }
+
+    button {
+      background: #002b6f;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: 700;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+    button:hover {
+      background: #001f51;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .recorte-ogimet {
+      --desplazamiento-x: 0px;
+      --desplazamiento-y: 0px;
+      --escala-mapa: 0.72;
+      --ancho-lienzo: 1296px;
+      --alto-lienzo: 1044px;
+      width: 100%;
+      height: calc(100vh - 150px);
+      min-height: 680px;
+      overflow: auto;
+      border: 3px solid #002b6f;
+      border-radius: 8px;
+      background: #d7edf9;
+      box-shadow: 0 10px 28px rgba(0, 43, 111, 0.18);
+      scroll-margin-top: 10px;
+      position: relative;
+    }
+
+    .recorte-ogimet:focus {
+      outline: 3px solid rgba(0, 43, 111, 0.28);
+      outline-offset: 3px;
+    }
+
+    .lienzo-ogimet {
+      width: var(--ancho-lienzo);
+      height: var(--alto-lienzo);
+      min-width: 100%;
+      min-height: 100%;
+      position: relative;
+    }
+
+    .estado-inicial {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      width: 100%;
+      height: 100%;
+      padding: 24px;
+      background: #d7edf9;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .mensaje-inicial {
+      width: min(780px, 100%);
+      padding: 28px;
+      border: 2px solid #8db9d8;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #002b6f;
+      font-size: clamp(1rem, 2vw, 1.45rem);
+      font-weight: 800;
+      line-height: 1.45;
+      text-align: center;
+      box-shadow: 0 10px 28px rgba(0, 43, 111, 0.14);
+    }
+
+    .recorte-ogimet.mapa-cargado .estado-inicial {
+      display: none;
+    }
+
+    .lienzo-ogimet iframe {
+      width: 1800px;
+      height: 1450px;
+      border: none;
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform: translate(var(--desplazamiento-x), var(--desplazamiento-y)) scale(var(--escala-mapa));
+      transform-origin: top left;
+    }
+
+    .control-zoom {
+      align-items: center;
+      justify-content: space-between;
+      width: 74px;
+      padding: 10px;
+      border: 1px solid #bfd8ea;
+      border-radius: 8px;
+      background: #eef8fe;
+    }
+
+    .zoom-slider {
+      appearance: none;
+      writing-mode: vertical-lr;
+      direction: rtl;
+      width: 14px;
+      height: 120px;
+      min-height: 120px;
+      padding: 0;
+      border: 1px solid #8db9d8;
+      border-radius: 999px;
+      background: linear-gradient(0deg, #75add0, #eef8fe);
+      cursor: pointer;
+    }
+
+    .zoom-slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border: 3px solid #ffffff;
+      border-radius: 50%;
+      background: #002b6f;
+      box-shadow: 0 2px 8px rgba(0, 43, 111, 0.25);
+    }
+
+    .zoom-slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border: 3px solid #ffffff;
+      border-radius: 50%;
+      background: #002b6f;
+      box-shadow: 0 2px 8px rgba(0, 43, 111, 0.25);
+    }
+
+    .control-direccional {
+      display: grid;
+      gap: 6px;
+      justify-items: start;
+      padding: 10px;
+      border: 1px solid #bfd8ea;
+      border-radius: 8px;
+      background: #eef8fe;
+    }
+
+    .pad-direccional {
+      display: grid;
+      grid-template-columns: repeat(3, 44px);
+      grid-template-rows: repeat(3, 44px);
+      gap: 6px;
+      justify-content: start;
+    }
+
+    .boton-flecha {
+      display: grid;
+      place-items: center;
+      min-height: 44px;
+      padding: 0;
+      border: 1px solid #7faccc;
+      background: #eaf5fc;
+      color: #174b70;
+    }
+
+    .boton-flecha:hover {
+      background: #d5eaf7;
+    }
+
+    .boton-flecha::before {
+      content: "";
+      width: 0;
+      height: 0;
+      border-style: solid;
+    }
+
+    .flecha-arriba {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .flecha-arriba::before {
+      border-width: 0 9px 12px;
+      border-color: transparent transparent #174b70;
+    }
+
+    .flecha-izquierda {
+      grid-column: 1;
+      grid-row: 2;
+    }
+
+    .flecha-izquierda::before {
+      border-width: 9px 12px 9px 0;
+      border-color: transparent #174b70 transparent transparent;
+    }
+
+    .flecha-derecha {
+      grid-column: 3;
+      grid-row: 2;
+    }
+
+    .flecha-derecha::before {
+      border-width: 9px 0 9px 12px;
+      border-color: transparent transparent transparent #174b70;
+    }
+
+    .flecha-abajo {
+      grid-column: 2;
+      grid-row: 3;
+    }
+
+    .flecha-abajo::before {
+      border-width: 12px 9px 0;
+      border-color: #174b70 transparent transparent;
+    }
+
+    @media (max-width: 1280px) {
+      .barra-controles {
+        grid-template-columns: minmax(0, 1fr) max-content;
+      }
+
+      .encabezado-titulo {
+        grid-column: 1 / -1;
+        justify-content: center;
+        min-width: 0;
+      }
+    }
+
+    @media (max-width: 760px) {
+      main {
+        width: min(100% - 20px, 1180px);
+        margin: 10px auto;
+      }
+
+      .panel {
+        padding: 14px;
+      }
+
+      .formulario {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .barra-controles {
+        grid-template-columns: 1fr;
+      }
+
+      .encabezado-titulo {
+        justify-content: center;
+        min-width: 0;
+        text-align: center;
+        grid-template-columns: 150px minmax(240px, 1fr);
+      }
+
+      .encuadre {
+        grid-template-columns: auto auto;
+        justify-content: start;
+      }
+
+      .formulario button {
+        grid-column: 1 / -1;
+      }
+
+      .recorte-ogimet {
+        height: 70vh;
+        min-height: 560px;
+      }
+    }
+
+    @media (max-width: 460px) {
+      .encabezado-titulo {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .logo-titulo {
+        width: 110px;
+        height: 110px;
+      }
+
+      .formulario,
+      .barra-controles {
+        grid-template-columns: 1fr;
+      }
+
+      .encuadre {
+        grid-template-columns: auto auto;
+      }
+
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <section class="panel" aria-labelledby="titulo">
+      <div class="barra-controles">
+        <div class="encabezado-titulo">
+          <img class="logo-titulo" src="logoM.png" alt="FAA-DGSAM Departamento Meteorologia Militar" onerror="this.style.display='none'">
+          <h1 id="titulo">VISUALIZADOR DE DATOS METEOROLOGICOS</h1>
+        </div>
+
+        <form class="formulario" onsubmit="mostrarMapa(event)">
+          <div class="campo">
+            <label for="zona">Zona</label>
+            <select id="zona">
+              <option value="norte">Norte</option>
+              <option value="sur" selected>Sur</option>
+              <option value="antartida">Antártida</option>
+            </select>
+          </div>
+
+          <div class="campo">
+            <label for="fecha">Fecha</label>
+            <input type="date" id="fecha" required>
+          </div>
+
+          <div class="campo">
+            <label for="hora">Hora UTC</label>
+            <select id="hora">
+              <option>00</option>
+              <option>01</option>
+              <option>02</option>
+              <option>03</option>
+              <option>04</option>
+              <option>05</option>
+              <option>06</option>
+              <option>07</option>
+              <option>08</option>
+              <option>09</option>
+              <option>10</option>
+              <option>11</option>
+              <option>12</option>
+              <option>13</option>
+              <option>14</option>
+              <option selected>15</option>
+              <option>16</option>
+              <option>17</option>
+              <option>18</option>
+              <option>19</option>
+              <option>20</option>
+              <option>21</option>
+              <option>22</option>
+              <option>23</option>
+            </select>
+          </div>
+
+          <div class="campo">
+            <label for="minuto">Minuto</label>
+            <select id="minuto">
+              <option selected>00</option>
+              <option>15</option>
+              <option>30</option>
+              <option>45</option>
+            </select>
+          </div>
+
+          <button class="boton-mapa" type="submit">Mostrar mapa</button>
+          <a class="enlace-mapa" id="enlaceMapa" href="#mapa-ogimet">Ir al mapa cargado</a>
+        </form>
+
+        <div class="encuadre" aria-label="Ajustes de encuadre">
+          <div class="campo control-zoom">
+            <label for="escalaMapa">Zoom</label>
+            <input class="zoom-slider" type="range" id="escalaMapa" min="0.5" max="1" step="0.01" value="0.72">
+          </div>
+
+          <div class="campo control-direccional">
+            <label>Desplazamiento</label>
+            <div class="pad-direccional" aria-label="Mover mapa">
+              <button class="boton-flecha flecha-arriba" type="button" data-mover-x="0" data-mover-y="-1" aria-label="Mover arriba"></button>
+              <button class="boton-flecha flecha-izquierda" type="button" data-mover-x="-1" data-mover-y="0" aria-label="Mover izquierda"></button>
+              <button class="boton-flecha flecha-derecha" type="button" data-mover-x="1" data-mover-y="0" aria-label="Mover derecha"></button>
+              <button class="boton-flecha flecha-abajo" type="button" data-mover-x="0" data-mover-y="1" aria-label="Mover abajo"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="recorte-ogimet" id="mapa-ogimet" tabindex="-1" aria-label="Mapa OGIMET">
+      <div class="estado-inicial" id="estadoInicial">
+        <p class="mensaje-inicial">SELECCIONADO EN EL MENU SUPERIOR PODRA NAVEGAR EN LOS DATOS METEOROLOGICOS PARA LA FECHA Y HORA ELEGIDOS</p>
+      </div>
+      <div class="lienzo-ogimet">
+        <iframe id="visorOgimet" title="Mapa meteorológico de OGIMET"></iframe>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function mostrarMapa(event) {
+      if (event) {
+        event.preventDefault();
+      }
+
+      const fecha = document.getElementById("fecha").value;
+
+      if (!fecha) {
+        alert("Seleccione una fecha");
+        return;
+      }
+
+      const [ano, mes, dia] = fecha.split("-");
+      const hora = document.getElementById("hora").value;
+      const minuto = document.getElementById("minuto").value;
+      const zona = document.getElementById("zona").value;
+      const zonas = {
+        norte: { lat: "30S", lon: "060W" },
+        sur: { lat: "45S", lon: "060W" },
+        antartida: { lat: "60S", lon: "060W" }
+      };
+      const zonaSeleccionada = zonas[zona];
+
+      const url =
+        "https://www.ogimet.com/cgi-bin/gmetar?" +
+        "esc=4" +
+        "&nav=Yes" +
+        "&lat=" + zonaSeleccionada.lat +
+        "&lon=" + zonaSeleccionada.lon +
+        "&proy=orto" +
+        "&base=bluem" +
+        "&ano=" + ano +
+        "&mes=" + mes +
+        "&day=" + dia +
+        "&hora=" + hora +
+        "&min=" + minuto +
+        "&vsg=Sg";
+
+      document.getElementById("visorOgimet").src = url;
+      recorteOgimet.classList.add("mapa-cargado");
+      document.getElementById("enlaceMapa").classList.add("visible");
+    }
+
+    const recorteOgimet = document.querySelector(".recorte-ogimet");
+    const enlaceMapa = document.getElementById("enlaceMapa");
+    const escalaMapa = document.getElementById("escalaMapa");
+    const pasoMovimiento = 25;
+    let desplazamientoX = 0;
+    let desplazamientoY = 0;
+
+    function aplicarEncuadre() {
+      const escala = Number(escalaMapa.value);
+
+      recorteOgimet.style.setProperty("--escala-mapa", escalaMapa.value);
+      recorteOgimet.style.setProperty("--desplazamiento-x", desplazamientoX + "px");
+      recorteOgimet.style.setProperty("--desplazamiento-y", desplazamientoY + "px");
+      recorteOgimet.style.setProperty("--ancho-lienzo", 1800 * escala + "px");
+      recorteOgimet.style.setProperty("--alto-lienzo", 1450 * escala + "px");
+    }
+
+    function moverMapa(deltaX, deltaY) {
+      desplazamientoX += deltaX * pasoMovimiento;
+      desplazamientoY += deltaY * pasoMovimiento;
+      aplicarEncuadre();
+    }
+
+    escalaMapa.addEventListener("input", aplicarEncuadre);
+    enlaceMapa.addEventListener("click", (event) => {
+      event.preventDefault();
+      recorteOgimet.scrollIntoView({ behavior: "smooth", block: "start" });
+      recorteOgimet.focus({ preventScroll: true });
+    });
+
+    document.querySelectorAll("[data-mover-x]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        moverMapa(Number(boton.dataset.moverX), Number(boton.dataset.moverY));
+      });
+    });
+
+    document.getElementById("fecha").valueAsDate = new Date();
+    aplicarEncuadre();
+  </script>
+
+</body>
+</html>
