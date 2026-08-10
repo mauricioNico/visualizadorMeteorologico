@@ -608,22 +608,18 @@
       });
     });
 
-    const ahora = new Date();
+    window.addEventListener("DOMContentLoaded", () => {
 
-// Fecha UTC actual
-const anoUTC = ahora.getUTCFullYear();
-const mesUTC = String(ahora.getUTCMonth() + 1).padStart(2, "0");
-const diaUTC = String(ahora.getUTCDate()).padStart(2, "0");
+  document.getElementById("fecha").valueAsDate = new Date();
 
-document.getElementById("fecha").value =
-    `${anoUTC}-${mesUTC}-${diaUTC}`;
+  const ahora = new Date();
+  const horaUTC = String(ahora.getUTCHours()).padStart(2, "0");
 
-// Hora UTC actual
-const horaUTC = String(ahora.getUTCHours()).padStart(2, "0");
+  document.getElementById("hora").value = horaUTC;
+  document.getElementById("minuto").value = "00";
 
-document.getElementById("hora").value = horaUTC;
-
-aplicarEncuadre();
+  aplicarEncuadre();
+});
   </script>
 
 </body>
