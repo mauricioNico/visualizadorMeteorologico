@@ -473,7 +473,7 @@
               <option>12</option>
               <option>13</option>
               <option>14</option>
-              <option selected>15</option>
+              <option>15</option>
               <option>16</option>
               <option>17</option>
               <option>18</option>
@@ -608,8 +608,22 @@
       });
     });
 
-    document.getElementById("fecha").valueAsDate = new Date();
-    aplicarEncuadre();
+    const ahora = new Date();
+
+// Fecha UTC actual
+const anoUTC = ahora.getUTCFullYear();
+const mesUTC = String(ahora.getUTCMonth() + 1).padStart(2, "0");
+const diaUTC = String(ahora.getUTCDate()).padStart(2, "0");
+
+document.getElementById("fecha").value =
+    `${anoUTC}-${mesUTC}-${diaUTC}`;
+
+// Hora UTC actual
+const horaUTC = String(ahora.getUTCHours()).padStart(2, "0");
+
+document.getElementById("hora").value = horaUTC;
+
+aplicarEncuadre();
   </script>
 
 </body>
