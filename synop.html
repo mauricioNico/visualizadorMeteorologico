@@ -541,10 +541,10 @@
       <div>
         <strong>Cargar observaciones SYNOP</strong><br>
         <span style="color:var(--muted); font-size:0.9rem;">
-          Puede seleccionar un archivo TXT obtenido desde OGIMET o pegar directamente
-          observaciones tal como aparecen en un listado, por ejemplo
-          <strong>29 - 12:00 - AAXX ...</strong>. Al presionar Procesar,
-          el visualizador las convierte internamente al formato admitido.
+          Puede seleccionar un archivo TXT o pegar directamente la salida de OGIMET,
+          incluso cuando cada SYNOP ocupa más de una línea. Al presionar Procesar,
+          el visualizador reconstruye cada mensaje y lo convierte internamente
+          al formato admitido.
         </span>
       </div>
 
@@ -564,12 +564,12 @@
         id="textoSynop"
         rows="7"
         spellcheck="false"
-        placeholder="Ejemplo:
-29 - 12:00 - AAXX 29124 87645 32970 12102 ...
-29 - 11:00 - AAXX 29114 87645 42970 12303 ...
-28 - 23:00 - AAXX 28234 87645 42965 23602 ...
+        placeholder="Ejemplo OGIMET:
+202608291100 0-20000-0-87645 87645 AAXX 29114 87645 42970 ...
+                   333 56006 81270=
+202608291000 0-20000-0-87645 87645 AAXX 29104 87645 NIL=
 
-También se admite el formato CSV completo."
+También se admiten los formatos abreviados y CSV."
       ></textarea>
 
       <div class="paste-actions">
@@ -894,6 +894,50 @@ También se admite el formato CSV completo."
 
     const mayus = texto.toUpperCase();
 
+    /*
+      FORMATO OGIMET REAL:
+      202608291100 0-20000-0-87645 87645 AAXX 29114 87645 ...
+                         333 56006 81270=
+
+      Las líneas de continuación se unen previamente en
+      reconstruirRegistrosOgimet().
+    */
+    let ogimet = texto.match(
+      /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})\s+\S+\s+(\d{5})\s+(AAXX\s+.+)$/i
+    );
+
+    if (ogimet) {
+      const year = Number(ogimet[1]);
+      const month = Number(ogimet[2]);
+      const day = Number(ogimet[3]);
+      const hour = Number(ogimet[4]);
+      const minute = Number(ogimet[5]);
+      const codigoCabecera = ogimet[6];
+      const reporte = ogimet[7].trim();
+
+      const codigoReporte = obtenerCodigoWmoDesdeReporte(reporte);
+      const codigo = codigoReporte || codigoCabecera;
+
+      if (
+        !codigo ||
+        !fechaUTCValida(year, month, day, hour, minute)
+      ) {
+        return null;
+      }
+
+      // Los SYNOP NIL no contienen variables meteorológicas.
+      // Se reconocen correctamente pero no se envían al decodificador.
+      if (/\bNIL\b/i.test(reporte)) {
+        return {
+          tipo: "nil",
+          fecha: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+          codigo
+        };
+      }
+
+      return `${codigo},${year},${String(month).padStart(2, "0")},${String(day).padStart(2, "0")},${String(hour).padStart(2, "0")},${String(minute).padStart(2, "0")},${reporte}`;
+    }
+
     if (
       mayus.startsWith("WMOIND") ||
       mayus.startsWith("WMO_ID") ||
@@ -979,26 +1023,69 @@ También se admite el formato CSV completo."
     return null;
   }
 
-  function normalizarTextoSynopPegado(textoOriginal) {
+  function reconstruirRegistrosOgimet(textoOriginal) {
     const lineas = textoOriginal
       .replace(/\r\n/g, "\n")
       .replace(/\r/g, "\n")
-      .split("\n")
-      .map(linea => linea.trim())
-      .filter(Boolean);
+      .split("\n");
 
-    const normalizadas = [];
-    const noReconocidas = [];
-    const exactas = new Set();
+    const registros = [];
+    let actual = null;
 
-    lineas.forEach(linea => {
-      const normalizada = normalizarLineaPegada(linea);
+    lineas.forEach(lineaOriginal => {
+      const linea = lineaOriginal.trim();
 
-      if (!normalizada) {
-        noReconocidas.push(linea);
+      if (!linea) return;
+
+      // Una observación OGIMET comienza siempre con YYYYMMDDHHMM.
+      if (/^\d{12}\s+/.test(linea)) {
+        if (actual) {
+          registros.push(actual);
+        }
+        actual = linea;
         return;
       }
 
+      // Si ya empezó un registro OGIMET, cualquier línea posterior
+      // indentada (333, 555, etc.) pertenece al mismo SYNOP.
+      if (actual) {
+        actual += " " + linea;
+        return;
+      }
+
+      // Para conservar compatibilidad con otros formatos de pegado.
+      registros.push(linea);
+    });
+
+    if (actual) {
+      registros.push(actual);
+    }
+
+    return registros;
+  }
+
+  function normalizarTextoSynopPegado(textoOriginal) {
+    const registros = reconstruirRegistrosOgimet(textoOriginal);
+
+    const normalizadas = [];
+    const noReconocidas = [];
+    const nil = [];
+    const exactas = new Set();
+
+    registros.forEach(registro => {
+      const normalizada = normalizarLineaPegada(registro);
+
+      if (!normalizada) {
+        noReconocidas.push(registro);
+        return;
+      }
+
+      if (typeof normalizada === "object" && normalizada.tipo === "nil") {
+        nil.push(normalizada);
+        return;
+      }
+
+      // Quitar únicamente mensajes exactamente duplicados.
       if (!exactas.has(normalizada)) {
         exactas.add(normalizada);
         normalizadas.push(normalizada);
@@ -1008,7 +1095,8 @@ También se admite el formato CSV completo."
     return {
       texto: normalizadas.join("\n"),
       cantidad: normalizadas.length,
-      ignoradas: noReconocidas.length
+      ignoradas: noReconocidas.length,
+      nil: nil.length
     };
   }
 
@@ -1043,8 +1131,12 @@ También se admite el formato CSV completo."
     let mensaje =
       `${resultado.cantidad} observación(es) convertida(s) y procesada(s) correctamente.`;
 
+    if (resultado.nil) {
+      mensaje += ` Se detectaron ${resultado.nil} observación(es) NIL sin datos meteorológicos.`;
+    }
+
     if (resultado.ignoradas) {
-      mensaje += ` Se ignoraron ${resultado.ignoradas} línea(s) que no pudieron interpretarse.`;
+      mensaje += ` Se ignoraron ${resultado.ignoradas} registro(s) que no pudieron interpretarse.`;
     }
 
     mostrarEstado(mensaje, "ok");
