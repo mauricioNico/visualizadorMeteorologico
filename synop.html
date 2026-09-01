@@ -681,6 +681,16 @@ También se admiten los formatos abreviados y CSV."
       </div>
 
       <div class="metric">
+        <div class="label">Máxima período</div>
+        <div class="value" id="max333Actual">—</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">Mínima período</div>
+        <div class="value" id="min333Actual">—</div>
+      </div>
+
+      <div class="metric">
         <div class="label">Precipitación 24 h</div>
         <div class="value" id="precip24Actual">—</div>
       </div>
@@ -702,6 +712,10 @@ También se admiten los formatos abreviados y CSV."
 
     <div class="card chart-card wide">
       <div id="graficoSensacion" class="chart"></div>
+    </div>
+
+    <div class="card chart-card wide">
+      <div id="graficoExtremos333" class="chart"></div>
     </div>
 
     <div class="card chart-card wide">
@@ -1182,6 +1196,7 @@ También se admiten los formatos abreviados y CSV."
     graficarRosaVientos(observaciones);
     graficarPresion(observaciones);
     graficarSensacion(observaciones);
+    graficarExtremos333(observaciones);
     graficarPrecipitacion24(observaciones);
   }
 
@@ -1272,6 +1287,7 @@ También se admiten los formatos abreviados y CSV."
     const visibilidad = decodificarVisibilidad(grupoVis);
     const nubosidad = decodificarNubosidad(grupoViento);
     const capasNubosas = decodificarCapasNubosas(seccion3);
+    const extremos333 = decodificarExtremosTemperatura333(seccion3, fecha);
 
     const sensacionCalculada =
       temperatura != null
@@ -1314,6 +1330,10 @@ También se admiten los formatos abreviados y CSV."
       coberturaIcono: nubosidad.icono,
       capasNubosas: capasNubosas.capas,
       capasNubosasTexto: capasNubosas.texto,
+      temperaturaMaxima333: extremos333.maxima,
+      temperaturaMinima333: extremos333.minima,
+      grupoMaxima333: extremos333.grupoMaxima,
+      grupoMinima333: extremos333.grupoMinima,
       sensacion
     };
   }
@@ -1579,6 +1599,49 @@ También se admiten los formatos abreviados y CSV."
       traza,
       periodoHoras: periodos[tr] ?? null,
       grupo
+    };
+  }
+
+  function decodificarExtremosTemperatura333(seccion3, fecha) {
+    /*
+      SECCIÓN 333:
+        1snTxTxTx = temperatura máxima del período
+        2snTnTnTn = temperatura mínima del período
+
+      Para este visualizador se consideran en las observaciones principales
+      de 00 y 12 UTC, que es donde la estación informa estos extremos.
+    */
+    if (!fecha || ![0, 12].includes(fecha.getUTCHours())) {
+      return {
+        maxima: null,
+        minima: null,
+        grupoMaxima: null,
+        grupoMinima: null
+      };
+    }
+
+    const grupoMaxima =
+      seccion3.find(g => /^1[01][0-9]{3}$/.test(g)) || null;
+
+    const grupoMinima =
+      seccion3.find(g => /^2[01][0-9]{3}$/.test(g)) || null;
+
+    function decodificarGrupoExtremo(grupo) {
+      if (!grupo) return null;
+
+      const signo = grupo[1];
+      const valor = Number(grupo.slice(2)) / 10;
+
+      if (!Number.isFinite(valor)) return null;
+
+      return signo === "1" ? -valor : valor;
+    }
+
+    return {
+      maxima: decodificarGrupoExtremo(grupoMaxima),
+      minima: decodificarGrupoExtremo(grupoMinima),
+      grupoMaxima,
+      grupoMinima
     };
   }
 
@@ -2184,6 +2247,12 @@ También se admiten los formatos abreviados y CSV."
         ? (observacion.tiempoTexto === "Sin fenómeno significativo" ? "Sin fenómeno" : "—")
         : String(observacion.ww).padStart(2, "0");
 
+    $("max333Actual").textContent =
+      formatoNumero(observacion.temperaturaMaxima333, 1, " °C");
+
+    $("min333Actual").textContent =
+      formatoNumero(observacion.temperaturaMinima333, 1, " °C");
+
     // En la navegación horaria se muestra solamente el grupo 6
     // correspondiente a ESA observación. No se arrastra el último
     // acumulado disponible desde otra hora.
@@ -2320,6 +2389,62 @@ También se admiten los formatos abreviados y CSV."
     layout.yaxis.title = "°C";
 
     Plotly.react("graficoTemp", datos, layout, CONFIG_PLOTLY);
+  }
+
+  function graficarExtremos333(obs) {
+    const maximas = obs.filter(o => o.temperaturaMaxima333 != null);
+    const minimas = obs.filter(o => o.temperaturaMinima333 != null);
+
+    const datos = [
+      {
+        x: maximas.map(o => o.fecha),
+        y: maximas.map(o => o.temperaturaMaxima333),
+        type: "scatter",
+        mode: "lines+markers",
+        name: "Máxima del período",
+        connectgaps: false,
+        customdata: maximas.map(o => o.grupoMaxima333),
+        hovertemplate:
+          "%{x|%d/%m/%Y %H:%M} UTC<br>" +
+          "Máxima: %{y:.1f} °C<br>" +
+          "Grupo 333: %{customdata}" +
+          "<extra></extra>"
+      },
+      {
+        x: minimas.map(o => o.fecha),
+        y: minimas.map(o => o.temperaturaMinima333),
+        type: "scatter",
+        mode: "lines+markers",
+        name: "Mínima del período",
+        connectgaps: false,
+        customdata: minimas.map(o => o.grupoMinima333),
+        hovertemplate:
+          "%{x|%d/%m/%Y %H:%M} UTC<br>" +
+          "Mínima: %{y:.1f} °C<br>" +
+          "Grupo 333: %{customdata}" +
+          "<extra></extra>"
+      }
+    ];
+
+    const layout = layoutBase(
+      "Temperaturas máximas y mínimas del período · sección 333 · 00/12 UTC"
+    );
+
+    layout.yaxis.title = "°C";
+
+    if (!maximas.length && !minimas.length) {
+      layout.annotations = [{
+        text: "No hay grupos de máxima/mínima en la sección 333 para 00/12 UTC",
+        x: 0.5,
+        y: 0.5,
+        xref: "paper",
+        yref: "paper",
+        showarrow: false,
+        font: { size: 14 }
+      }];
+    }
+
+    Plotly.react("graficoExtremos333", datos, layout, CONFIG_PLOTLY);
   }
 
   function graficarSensacion(obs) {
@@ -2625,14 +2750,15 @@ También se admiten los formatos abreviados y CSV."
     $("sensacionPrincipal").textContent = "—";
 
     ["tdActual", "hrActual", "stActual", "vientoActual", "presionActual",
-     "tendActual", "visActual", "nubActual", "wwActual", "precip24Actual"].forEach(id => {
+     "tendActual", "visActual", "nubActual", "wwActual", "max333Actual",
+     "min333Actual", "precip24Actual"].forEach(id => {
       $(id).textContent = "—";
     });
 
     $("rawData").textContent = "Sin datos.";
 
     ["graficoTemp", "graficoViento", "graficoPresion", "graficoSensacion",
-     "graficoPrecipitacion"].forEach(id => {
+     "graficoExtremos333", "graficoPrecipitacion"].forEach(id => {
       Plotly.purge(id);
       $(id).innerHTML = "";
     });
