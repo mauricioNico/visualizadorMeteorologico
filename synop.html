@@ -713,12 +713,7 @@ También se admiten los formatos abreviados y CSV."
     <div class="card chart-card wide">
       <div id="graficoSensacion" class="chart"></div>
     </div>
-
-    <div class="card chart-card wide">
-      <div id="graficoExtremos333" class="chart"></div>
-    </div>
-
-    <div class="card chart-card wide">
+<div class="card chart-card wide">
       <div id="graficoPrecipitacion" class="chart"></div>
     </div>
   </section>
@@ -1196,7 +1191,6 @@ También se admiten los formatos abreviados y CSV."
     graficarRosaVientos(observaciones);
     graficarPresion(observaciones);
     graficarSensacion(observaciones);
-    graficarExtremos333(observaciones);
     graficarPrecipitacion24(observaciones);
   }
 
@@ -2391,62 +2385,6 @@ También se admiten los formatos abreviados y CSV."
     Plotly.react("graficoTemp", datos, layout, CONFIG_PLOTLY);
   }
 
-  function graficarExtremos333(obs) {
-    const maximas = obs.filter(o => o.temperaturaMaxima333 != null);
-    const minimas = obs.filter(o => o.temperaturaMinima333 != null);
-
-    const datos = [
-      {
-        x: maximas.map(o => o.fecha),
-        y: maximas.map(o => o.temperaturaMaxima333),
-        type: "scatter",
-        mode: "lines+markers",
-        name: "Máxima del período",
-        connectgaps: false,
-        customdata: maximas.map(o => o.grupoMaxima333),
-        hovertemplate:
-          "%{x|%d/%m/%Y %H:%M} UTC<br>" +
-          "Máxima: %{y:.1f} °C<br>" +
-          "Grupo 333: %{customdata}" +
-          "<extra></extra>"
-      },
-      {
-        x: minimas.map(o => o.fecha),
-        y: minimas.map(o => o.temperaturaMinima333),
-        type: "scatter",
-        mode: "lines+markers",
-        name: "Mínima del período",
-        connectgaps: false,
-        customdata: minimas.map(o => o.grupoMinima333),
-        hovertemplate:
-          "%{x|%d/%m/%Y %H:%M} UTC<br>" +
-          "Mínima: %{y:.1f} °C<br>" +
-          "Grupo 333: %{customdata}" +
-          "<extra></extra>"
-      }
-    ];
-
-    const layout = layoutBase(
-      "Temperaturas máximas y mínimas del período · sección 333 · 00/12 UTC"
-    );
-
-    layout.yaxis.title = "°C";
-
-    if (!maximas.length && !minimas.length) {
-      layout.annotations = [{
-        text: "No hay grupos de máxima/mínima en la sección 333 para 00/12 UTC",
-        x: 0.5,
-        y: 0.5,
-        xref: "paper",
-        yref: "paper",
-        showarrow: false,
-        font: { size: 14 }
-      }];
-    }
-
-    Plotly.react("graficoExtremos333", datos, layout, CONFIG_PLOTLY);
-  }
-
   function graficarSensacion(obs) {
     const datos = [
       {
@@ -2758,7 +2696,7 @@ También se admiten los formatos abreviados y CSV."
     $("rawData").textContent = "Sin datos.";
 
     ["graficoTemp", "graficoViento", "graficoPresion", "graficoSensacion",
-     "graficoExtremos333", "graficoPrecipitacion"].forEach(id => {
+     "graficoPrecipitacion"].forEach(id => {
       Plotly.purge(id);
       $(id).innerHTML = "";
     });
