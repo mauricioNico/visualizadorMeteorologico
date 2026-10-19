@@ -35,6 +35,14 @@
     .detalle pre{font:12px/1.5 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f5fa;border:1px solid var(--line);border-radius:8px;padding:9px;margin:9px 0}
     .link-metar{display:inline-block;background:#164a7d;color:white;padding:9px 11px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;margin-top:7px}
     .estacion-punto{box-shadow:0 0 0 1px #0005}
+    .historial{margin-top:14px;scroll-margin-top:16px}
+    .historial-barra{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 14px}
+    .historial-barra h2{margin:0;font-size:18px}
+    .historial-barra .link-metar{margin-top:0}
+    .historial-visor{margin-top:12px;border:1px solid #b7c7d7;border-radius:10px;overflow:hidden;background:#fff}
+    .historial-visor iframe{display:block;width:100%;height:min(75vh,750px);min-height:510px;border:0;background:#fff}
+    .boton-historial{width:100%;margin-top:9px}
+    .historial-nota{font-size:13px;line-height:1.45;color:#51667c;margin:10px 0 0}
     footer{text-align:center;color:#607183;font-size:12px;padding:0 12px 24px}
     @media(max-width:920px){.contenedor{grid-template-columns:1fr}aside{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:600px){main{padding:9px}aside{grid-template-columns:1fr}#mapa{height:65vh;min-height:390px}.controles>*{flex:1 1 135px}.controles button{flex:0 0 auto}}
@@ -57,7 +65,7 @@
       <button id="buscar" type="button">Buscar estación</button>
       <button id="actualizar" type="button">Actualizar datos</button>
     </div>
-    <p class="ayuda">Los colores muestran el <strong>último METAR publicado</strong>, no la fecha histórica elegida. La fecha y hora seleccionadas se utilizan al abrir la consulta de 24 horas en Ogimet. Los datos no recientes se muestran en gris.</p>
+    <p class="ayuda">Los colores muestran el <strong>último METAR publicado</strong>, no la fecha histórica elegida. Al seleccionar una estación, su consulta de 24 horas en Ogimet aparece <strong>debajo del mapa en esta misma página</strong>, con la fecha y hora UTC elegidas. Los datos no recientes se muestran en gris.</p>
   </div>
   <div id="estado" class="panel mensaje" role="status" aria-live="polite">Cargando estaciones y observaciones METAR…</div>
   <div class="contenedor">
@@ -81,6 +89,21 @@
       </section>
     </aside>
   </div>
+  <section id="historial" class="panel historial" hidden aria-label="Resultados históricos de Ogimet">
+    <div class="historial-barra">
+      <h2>Historial METAR · <span id="historialOaci"></span></h2>
+      <a id="enlaceOgimet" class="link-metar" href="https://www.ogimet.com/metars.phtml"
+         target="_self" rel="noreferrer">Ver en Ogimet en esta pestaña ↗</a>
+    </div>
+    <p class="historial-nota" id="estadoHistorial" role="status">
+      La consulta de Ogimet aparece dentro del visualizador. Si el servidor impide
+      mostrarla aquí, usá el enlace de respaldo para verla en esta misma pestaña.
+    </p>
+    <div class="historial-visor">
+      <iframe id="iframeOgimet" title="Resultados históricos METAR de Ogimet"
+              referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    </div>
+  </section>
 </main>
 <footer>Datos METAR: NOAA Aviation Weather Center · Cartografía: Esri / IGN · Desarrollado por Mauricio Nicolás Laurizi · No utilizar para decisiones operativas de vuelo.</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -106,6 +129,11 @@
   const input = document.getElementById("oaci");
   const detalle = document.getElementById("detalle");
   const estado = document.getElementById("estado");
+  const historial = document.getElementById("historial");
+  const historialOaci = document.getElementById("historialOaci");
+  const iframeOgimet = document.getElementById("iframeOgimet");
+  const enlaceOgimet = document.getElementById("enlaceOgimet");
+  const estadoHistorial = document.getElementById("estadoHistorial");
   let estaciones = [];
   let marcadores = new Map();
 
@@ -145,6 +173,32 @@
     });
     return "https://www.ogimet.com/display_metars2.php?"+q.toString();
   }
+  // Reutilizamos el mismo panel de resultados para cada estación seleccionada,
+  // sin abrir pestañas ni perder el mapa o sus controles.
+  function mostrarHistorialIntegrado(icao) {
+    const url = urlOgimet(icao);
+    if (!url) {
+      historial.hidden = true;
+      iframeOgimet.removeAttribute("src");
+      return;
+    }
+    historial.hidden = false;
+    historialOaci.textContent = icao;
+    enlaceOgimet.href = url;
+    if (iframeOgimet.getAttribute("src") !== url) {
+      estadoHistorial.textContent =
+        "Consulta histórica de " + icao +
+        " (período seleccionado arriba, en UTC). Si Ogimet bloquea su visualización incrustada, " +
+        "podés verla desde el enlace de respaldo, sin abrir una pestaña nueva.";
+      iframeOgimet.src = url;
+    }
+  }
+  function botonVerHistorial() {
+    const boton = el("button","Ver historial debajo del mapa ↓","boton-historial");
+    boton.type = "button";
+    boton.addEventListener("click",() => historial.scrollIntoView({behavior:"smooth",block:"start"}));
+    return boton;
+  }
   function colorSeguro(s) {
     const permitidos=new Set(["azul","blanco","verde","amarillo","ambar","rojo","negro","gris"]);
     const ahora=Date.now(), observado=Date.parse(s.time);
@@ -160,12 +214,8 @@
     detalle.append(el("p","Techo: "+(Number.isFinite(s.ceilingFt)?Math.round(s.ceilingFt)+" pies":"sin dato")));
     const reporte=el("pre",s.raw||"No se dispone del texto METAR.");
     detalle.append(reporte);
-    const href=urlOgimet(s.icao);
-    if (href) {
-      const a=el("a","Consultar historial en Ogimet ↗","link-metar");
-      a.href=href; a.target="_blank"; a.rel="noopener noreferrer";
-      detalle.append(a);
-    }
+    mostrarHistorialIntegrado(s.icao);
+    if (!historial.hidden) detalle.append(botonVerHistorial());
   }
   function seleccionar(s,centrar) {
     input.value=s.icao;
@@ -233,8 +283,8 @@
     else{
       detalle.replaceChildren(el("h2",codigo+" — sin observación disponible"));
       detalle.append(el("p","No se encontró una observación reciente en el archivo publicado. Podés consultar el historial de la estación en Ogimet."));
-      const url=urlOgimet(codigo);
-      if(url){const a=el("a","Consultar historial en Ogimet ↗","link-metar");a.href=url;a.target="_blank";a.rel="noopener noreferrer";detalle.append(a);}
+      mostrarHistorialIntegrado(codigo);
+      if (!historial.hidden) detalle.append(botonVerHistorial());
     }
   }
   document.getElementById("region").addEventListener("change",e=>encuadrar(e.target.value));
