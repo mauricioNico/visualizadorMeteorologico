@@ -1,0 +1,43 @@
+name: Actualizar METAR del mapa interactivo
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/actualizar_metar.py"
+      - ".github/workflows/actualizar-metar.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: actualizar-metar
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Actualizar cache METAR NOAA
+        run: python3 scripts/actualizar_metar.py
+
+      - name: Publicar JSON en GitHub Pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/metar_latest.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios."
+            exit 0
+          fi
+          git commit -m "data: actualizar observaciones METAR del mapa [skip ci]"
+          git push origin HEAD:main
