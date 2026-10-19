@@ -256,6 +256,8 @@
     })
     .catch(()=>fetch("https://apis.datos.gob.ar/georef/api/v2.0/provincias.geojson")
       .then(r=>{if(!r.ok)throw Error("geometría "+r.status);return r.json();}))
+    .catch(()=>fetch("https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/south-america.geojson")
+      .then(r=>{if(!r.ok)throw Error("límites "+r.status);return r.json();}))
     .then(g=>L.geoJSON(g,{style:{color:"#a92026",weight:1,opacity:.8,fill:false},interactive:false}).addTo(mapa))
     .catch(()=>{ /* IGN permanece disponible como mapa base alternativo */ });
   fechaUTC(); encuadrar("sur"); cargar();
