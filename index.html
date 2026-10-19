@@ -28,7 +28,8 @@
     .ayuda{font-size:13px;color:#53677a;line-height:1.45;margin:8px 0 0}
     .mensaje{padding:10px 12px;border-radius:10px;background:#e6edf5;font-size:13px;font-weight:650}
     .mensaje.error{background:#fff0ec;color:#9b3417}
-    .contenedor{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px}
+    .contenedor{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px;align-items:start}
+    .columna-mapa{display:flex;flex-direction:column;gap:14px;min-width:0}
     #mapa{height:min(78vh,860px);min-height:520px;width:100%;border-radius:14px;border:1px solid #b8ccdf;background:#dce8ef}
     aside{align-self:start;display:grid;gap:12px}
     .leyenda h2,.detalle h2{font-size:16px;margin:0 0 10px}
@@ -36,8 +37,17 @@
     .leyenda-item:last-child{border-bottom:0}
     .punto-leyenda{height:13px;width:13px;border-radius:50%;border:1px solid #596678;margin-top:2px}
     .leyenda-item strong{font-size:12px}
-    .detalle p{font-size:13px;line-height:1.45;margin:5px 0}
-    .detalle pre{font:12px/1.5 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f5fa;border:1px solid var(--line);border-radius:8px;padding:9px;margin:9px 0}
+    .detalle{margin-bottom:0;scroll-margin-top:16px}
+    .detalle h2{font-size:18px}
+    .detalle p{font-size:13px;line-height:1.45;margin:6px 0}
+    .detalle-datos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:12px 0}
+    .detalle-dato{border:1px solid var(--line);background:#f5f9fd;border-radius:10px;padding:11px 12px;min-width:0}
+    .detalle-dato strong{display:block;color:#586f87;font-size:11px;line-height:1.4;text-transform:uppercase;letter-spacing:.025em}
+    .detalle-dato span{display:block;font-weight:750;font-size:14px;margin-top:4px;overflow-wrap:anywhere}
+    .detalle-categoria{display:inline-flex!important;align-items:center;gap:7px}
+    .detalle-categoria .detalle-color{display:inline-block;width:12px;height:12px;border:1px solid #53677a;border-radius:50%;flex:0 0 12px}
+    .detalle .subtitulo-metar{font-size:13px;font-weight:800;color:#294666;margin:14px 0 6px}
+    .detalle pre{font:13px/1.6 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f5fa;border:1px solid var(--line);border-radius:8px;padding:12px;margin:0}
     .link-metar{display:inline-block;background:#164a7d;color:white;padding:9px 11px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;margin-top:7px}
     .estacion-punto{box-shadow:0 0 0 1px #0005}
     .historial{margin-top:14px;scroll-margin-top:16px}
@@ -49,8 +59,8 @@
     .boton-historial{width:100%;margin-top:9px}
     .historial-nota{font-size:13px;line-height:1.45;color:#51667c;margin:10px 0 0}
     footer{text-align:center;color:#607183;font-size:12px;padding:0 12px 24px}
-    @media(max-width:920px){.contenedor{grid-template-columns:1fr}aside{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media(max-width:600px){main{padding:9px}aside{grid-template-columns:1fr}#mapa{height:65vh;min-height:390px}.controles>*{flex:1 1 135px}.controles button{flex:0 0 auto}}
+    @media(max-width:920px){.contenedor{grid-template-columns:1fr}aside{grid-template-columns:1fr}.detalle-datos{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:600px){main{padding:9px}#mapa{height:65vh;min-height:390px}.controles>*{flex:1 1 135px}.controles button{flex:0 0 auto}.detalle-datos{gap:7px}.detalle-dato{padding:9px}.detalle-dato span{font-size:12px}}
   </style>
 </head>
 <body>
@@ -77,7 +87,13 @@
   </div>
   <div id="estado" class="panel mensaje" role="status" aria-live="polite">Cargando estaciones y observaciones METAR…</div>
   <div class="contenedor">
-    <div id="mapa" role="application" aria-label="Mapa interactivo de estaciones METAR"></div>
+    <div class="columna-mapa">
+      <div id="mapa" role="application" aria-label="Mapa interactivo de estaciones METAR"></div>
+      <section class="panel detalle" id="detalle" aria-live="polite" aria-label="Información METAR de la estación seleccionada">
+        <h2>METAR · Estación seleccionada</h2>
+        <p>Seleccioná una estación sobre el mapa o buscá su código OACI para ver sus observaciones aquí.</p>
+      </section>
+    </div>
     <aside>
       <section class="panel leyenda">
         <h2>Código de color METAR</h2>
@@ -90,10 +106,6 @@
         <div class="leyenda-item"><span class="punto-leyenda" style="background:black"></span><strong>Negro</strong><span>Cierre explícitamente comunicado en el reporte (ej. SNOCLO).</span></div>
         <div class="leyenda-item"><span class="punto-leyenda" style="background:#888"></span><strong>Gris</strong><span>Sin suficientes datos o reporte con más de 3 horas.</span></div>
         <p class="ayuda">Clasificación experimental inspirada en Ogimet. No equivale a una categoría oficial de vuelo ni a una autorización operacional.</p>
-      </section>
-      <section class="panel detalle" id="detalle">
-        <h2>Estación seleccionada</h2>
-        <p>Hacé clic sobre un punto del mapa o buscá su código OACI.</p>
       </section>
     </aside>
   </div>
@@ -214,14 +226,29 @@
     return permitidos.has(s.color)?s.color:"gris";
   }
   const colorHex={azul:"#0000ff",blanco:"#ffffff",verde:"#008a13",amarillo:"#ffff00",ambar:"#ffad00",rojo:"#ff0000",negro:"#000000",gris:"#85898f"};
+  function tarjetaDato(nombre,valor) {
+    const tarjeta=el("div",undefined,"detalle-dato");
+    tarjeta.append(el("strong",nombre),el("span",valor));
+    return tarjeta;
+  }
   function dibujarDetalle(s) {
-    detalle.replaceChildren(el("h2",s.icao+" — "+(s.name||"Estación")));
-    detalle.append(el("p","Observación (UTC): "+(s.time||"sin fecha")));
-    detalle.append(el("p","Categoría en mapa: "+colorSeguro(s).toUpperCase()));
-    detalle.append(el("p","Visibilidad: "+(Number.isFinite(s.visibilityM)?Math.round(s.visibilityM)+" m":"sin dato")));
-    detalle.append(el("p","Techo: "+(Number.isFinite(s.ceilingFt)?Math.round(s.ceilingFt)+" pies":"sin dato")));
-    const reporte=el("pre",s.raw||"No se dispone del texto METAR.");
-    detalle.append(reporte);
+    detalle.replaceChildren(el("h2","METAR · "+s.icao+" — "+(s.name||"Estación")));
+    const datos=el("div",undefined,"detalle-datos");
+    datos.append(tarjetaDato("Observación (UTC)",s.time||"Sin fecha"));
+    const categoria=tarjetaDato("Código de color",colorSeguro(s).toUpperCase());
+    const categoriaTexto=categoria.querySelector("span");
+    categoriaTexto.className="detalle-categoria";
+    const punto=el("i",undefined,"detalle-color");
+    punto.style.backgroundColor=colorHex[colorSeguro(s)];
+    punto.setAttribute("aria-hidden","true");
+    categoriaTexto.prepend(punto);
+    datos.append(categoria);
+    datos.append(tarjetaDato("Visibilidad",Number.isFinite(s.visibilityM)?Math.round(s.visibilityM)+" m":"Sin dato"));
+    const techo=Number.isFinite(s.ceilingFt)?(s.ceilingFt>=99999?"Sin techo significativo":Math.round(s.ceilingFt)+" pies"):"Sin dato";
+    datos.append(tarjetaDato("Techo de nubes",techo));
+    detalle.append(datos);
+    detalle.append(el("p","Texto original del METAR","subtitulo-metar"));
+    detalle.append(el("pre",s.raw||"No se dispone del texto METAR."));
     mostrarHistorialIntegrado(s.icao);
     if (!historial.hidden) detalle.append(botonVerHistorial());
   }
@@ -289,7 +316,7 @@
     const s=estaciones.find(x=>x.icao===codigo);
     if(s)seleccionar(s,true);
     else{
-      detalle.replaceChildren(el("h2",codigo+" — sin observación disponible"));
+      detalle.replaceChildren(el("h2","METAR · "+codigo+" — sin observación disponible"));
       detalle.append(el("p","No se encontró una observación reciente en el archivo publicado. Podés consultar el historial de la estación en Ogimet."));
       mostrarHistorialIntegrado(codigo);
       if (!historial.hidden) detalle.append(botonVerHistorial());
