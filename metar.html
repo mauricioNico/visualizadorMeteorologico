@@ -202,7 +202,15 @@
   async function cargar() {
     enviarEstado("Cargando última instantánea METAR…",false);
     try {
-      const response=await fetch("./data/metar_latest.json?v="+Math.floor(Date.now()/300000),{cache:"no-store"});
+      // Las publicaciones hechas por Actions con GITHUB_TOKEN no fuerzan el
+      // redespliegue de Pages; raw.githubusercontent.com sí refleja el JSON del repo.
+      let response;
+      try {
+        response=await fetch("https://raw.githubusercontent.com/mauricioNico/visualizadorMeteorologico/main/data/metar_latest.json?v="+Math.floor(Date.now()/300000),{cache:"no-store"});
+        if(!response.ok)throw Error("GitHub raw "+response.status);
+      }catch(_error){
+        response=await fetch("./data/metar_latest.json?v="+Math.floor(Date.now()/300000),{cache:"no-store"});
+      }
       if(!response.ok)throw Error("HTTP "+response.status);
       const json=await response.json();
       if(!Array.isArray(json.stations)||json.stations.length===0)
