@@ -18,6 +18,8 @@ URL = "https://aviationweather.gov/data/cache/metars.cache.xml.gz"
 DESTINO = Path(__file__).resolve().parents[1] / "data" / "metar_latest.json"
 MAX_BYTES_GZIP = 16 * 1024 * 1024
 MAX_BYTES_XML = 100 * 1024 * 1024
+GEOREF_URL = "https://apis.datos.gob.ar/georef/api/v2.0/provincias.geojson"
+PROVINCIAS = DESTINO.parent / "provincias.geojson"
 
 
 def numero(valor):
@@ -38,6 +40,7 @@ def valor(elemento, nombre):
 def techo_metra(elemento, texto):
     capas = []
     hay_nubes = False
+    techo_sin_altura = False
     for capa in elemento.findall("sky_condition"):
         cobertura = capa.attrib.get("sky_cover", "").upper()
         if cobertura:
@@ -46,6 +49,8 @@ def techo_metra(elemento, texto):
             alto = numero(capa.attrib.get("cloud_base_ft_agl"))
             if alto is not None:
                 capas.append(alto)
+            else:
+                techo_sin_altura = True
     vv = numero(valor(elemento, "vert_vis_ft"))
     if vv is not None:
         capas.append(vv)
@@ -54,6 +59,8 @@ def techo_metra(elemento, texto):
         capas.append(int(match.group(1)) * 100)
     if capas:
         return min(capas)
+    if techo_sin_altura or re.search(r"\b(?:BKN|OVC|VV)///\b", texto.upper()):
+        return None
     # No atribuir cielo despejado si el reporte no informa nubosidad.
     if hay_nubes or re.search(r"\b(?:CAVOK|NSC|NCD|SKC|CLR|FEW\d{3}|SCT\d{3})\b", texto.upper()):
         return 99999.0
@@ -99,7 +106,13 @@ def procesar(metar):
 
     vis_millas = numero(valor(metar, "visibility_statute_mi"))
     vis_metros = round(vis_millas * 1609.344) if vis_millas is not None else None
-    if vis_metros is None and re.search(r"\bCAVOK\b", raw):
+    # Priorizar visibilidad métrica explícita para evitar que el redondeo
+    # al convertir desde millas rebaje erróneamente 8000 m a 7998 m.
+    tokens = raw.upper().split()
+    vis_metrica = next((int(t) for t in tokens if re.fullmatch(r"\d{4}", t)), None)
+    if vis_metrica is not None:
+        vis_metros = 10000 if vis_metrica == 9999 else vis_metrica
+    if re.search(r"\bCAVOK\b", raw):
         vis_metros = 10000
     techo = techo_metra(metar, raw)
     nombre = valor(metar, "station_name") or valor(metar, "name") or codigo
@@ -146,12 +159,38 @@ def construir(xml: bytes):
     }
 
 
+def actualizar_provincias():
+    """Publica la geometría provincial oficial; fallo no interrumpe los METAR."""
+    if PROVINCIAS.exists():
+        return
+    try:
+        req = urllib.request.Request(GEOREF_URL, headers={
+            "User-Agent": "VisualizadorMeteorologico/1.0",
+            "Accept": "application/geo+json,application/json",
+        })
+        with urllib.request.urlopen(req, timeout=30) as respuesta:
+            contenido = respuesta.read(16 * 1024 * 1024 + 1)
+        if len(contenido) > 16 * 1024 * 1024:
+            raise RuntimeError("Geometría provincial demasiado grande")
+        geo = json.loads(contenido)
+        if geo.get("type") != "FeatureCollection" or len(geo.get("features", [])) < 20:
+            raise RuntimeError("Formato de provincias inesperado")
+        PROVINCIAS.parent.mkdir(parents=True, exist_ok=True)
+        temp = PROVINCIAS.with_suffix(".tmp")
+        temp.write_text(json.dumps(geo, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+        temp.replace(PROVINCIAS)
+        print("Geometría provincial IGN/GeoRef almacenada")
+    except Exception as exc:
+        print(f"Aviso: no se pudo actualizar cartografía provincial: {exc}")
+
+
 def main():
     documento = construir(obtener_xml())
     DESTINO.parent.mkdir(parents=True, exist_ok=True)
     temporal = DESTINO.with_suffix(".tmp")
     temporal.write_text(json.dumps(documento, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     temporal.replace(DESTINO)
+    actualizar_provincias()
     print(f"Publicados {len(documento['stations'])} METAR. Generado {documento['generatedAt']}")
 
 
