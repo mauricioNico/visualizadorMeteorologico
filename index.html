@@ -215,8 +215,32 @@
       background: #0f3058;
     }
 
-undefined    button:active {
+    button:active {
       transform: translateY(1px);
+    }
+
+    /* Consulta OACI alternativa: se mantiene sin cambios el iframe de Ogimet. */
+    .consulta-oaci {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 12px 16px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+    .consulta-oaci .campo-oaci {
+      width: min(230px, 100%);
+    }
+    .consulta-oaci .boton-oaci {
+      width: auto;
+    }
+    .consulta-oaci .ayuda-oaci {
+      flex: 1 1 340px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
     }
 
     .recorte-ogimet {
@@ -454,7 +478,12 @@ undefined    button:active {
       }
     }
 
-undefined    @media (max-width: 460px) {
+    @media (max-width: 460px) {
+      .consulta-oaci .campo-oaci,
+      .consulta-oaci .boton-oaci {
+        width: 100%;
+      }
+
       .formulario,
       .barra-controles {
         grid-template-columns: 1fr;
