@@ -215,7 +215,7 @@
       background: #0f3058;
     }
 
-    button:active {
+undefined    button:active {
       transform: translateY(1px);
     }
 
@@ -454,7 +454,7 @@
       }
     }
 
-    @media (max-width: 460px) {
+undefined    @media (max-width: 460px) {
       .formulario,
       .barra-controles {
         grid-template-columns: 1fr;
@@ -571,6 +571,42 @@
           </div>
         </div>
       </div>
+
+      <form id="consultaOaci" class="consulta-oaci"
+            action="https://www.ogimet.com/display_metars2.php"
+            method="get" target="_blank" rel="noopener noreferrer"
+            onsubmit="prepararConsultaOaci(event)">
+        <div class="campo campo-oaci">
+          <label for="codigoOaci">Consulta METAR por código OACI</label>
+          <input type="text" id="codigoOaci" name="lugar"
+                 minlength="4" maxlength="4" pattern="[A-Za-z]{4}"
+                 placeholder="Ej.: SADL" autocomplete="off" autocapitalize="characters"
+                 spellcheck="false" aria-describedby="ayudaOaci" required>
+        </div>
+
+        <input type="hidden" name="tipo" value="ALL">
+        <input type="hidden" name="ord" value="REV">
+        <input type="hidden" name="nil" value="SI">
+        <input type="hidden" name="fmt" value="html">
+        <input type="hidden" name="ano">
+        <input type="hidden" name="mes">
+        <input type="hidden" name="day">
+        <input type="hidden" name="hora">
+        <input type="hidden" name="anof">
+        <input type="hidden" name="mesf">
+        <input type="hidden" name="dayf">
+        <input type="hidden" name="horaf">
+        <input type="hidden" name="minf" value="59">
+        <input type="hidden" name="enviar" value="Ver">
+
+        <button class="boton-oaci" type="submit">Consultar en Ogimet ↗</button>
+        <p id="ayudaOaci" class="ayuda-oaci">
+          Si falla el enlace de una estación del mapa, ingresá su código OACI.
+          Utiliza la fecha y hora UTC seleccionadas arriba y consulta desde
+          esa hora del día anterior hasta el minuto 59 del día elegido.
+          El resultado se abre en otra pestaña.
+        </p>
+      </form>
     </section>
 
     <section class="recorte-ogimet" id="mapa-ogimet" tabindex="-1" aria-label="Mapa OGIMET">
@@ -590,6 +626,52 @@
   </footer>
 
   <script>
+    // El iframe está en otro dominio: sus enlaces internos no se pueden corregir aquí.
+    // Este formulario genera el mismo GET que Ogimet acepta desde su buscador.
+    function prepararConsultaOaci(event) {
+      const formulario = event.currentTarget;
+      const codigo = formulario.elements.namedItem("lugar");
+      codigo.value = codigo.value.trim().toLowerCase();
+
+      if (!/^[a-z]{4}$/.test(codigo.value)) {
+        event.preventDefault();
+        alert("Ingresá un código OACI de cuatro letras (por ejemplo, SADL).");
+        codigo.focus();
+        return;
+      }
+
+      const fecha = document.getElementById("fecha").value;
+      if (!fecha) {
+        event.preventDefault();
+        alert("Seleccioná una fecha UTC antes de consultar los METAR.");
+        document.getElementById("fecha").focus();
+        return;
+      }
+
+      const [ano, mes, dia] = fecha.split("-").map(Number);
+      const hora = Number(document.getElementById("hora").value);
+      const fechaFinal = new Date(Date.UTC(ano, mes - 1, dia, hora));
+      const fechaInicial = new Date(fechaFinal.getTime() - 24 * 60 * 60 * 1000);
+
+      // Inicio: mismo horario del día anterior; final: HH:59 del día seleccionado.
+      // El cálculo UTC contempla automáticamente cambios de mes y año.
+      const parametros = {
+        ano: fechaInicial.getUTCFullYear(),
+        mes: fechaInicial.getUTCMonth() + 1,
+        day: fechaInicial.getUTCDate(),
+        hora: fechaInicial.getUTCHours(),
+        anof: fechaFinal.getUTCFullYear(),
+        mesf: fechaFinal.getUTCMonth() + 1,
+        dayf: fechaFinal.getUTCDate(),
+        horaf: fechaFinal.getUTCHours()
+      };
+      for (const [nombre, valor] of Object.entries(parametros)) {
+        formulario.elements.namedItem(nombre).value = String(valor);
+      }
+      // minf=59 y enviar=Ver son campos ocultos fijos.
+      // El navegador abre el GET de Ogimet en otra pestaña.
+    }
+
     function mostrarMapa(event) {
       if (event) {
         event.preventDefault();
