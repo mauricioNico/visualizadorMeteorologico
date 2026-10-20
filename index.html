@@ -54,6 +54,8 @@
     .historial-barra{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 14px}
     .historial-barra h2{margin:0;font-size:18px}
     .historial-barra .link-metar{margin-top:0}
+    .historial-barra .acciones-ogimet{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+    .historial-barra .acciones-ogimet button{font-size:13px;min-height:39px}
     .historial-visor{margin-top:12px;border:1px solid #b7c7d7;border-radius:10px;overflow:hidden;background:#fff}
     .historial-visor iframe{display:block;width:100%;height:min(75vh,750px);min-height:510px;border:0;background:#fff}
     .boton-historial{width:100%;margin-top:9px}
@@ -115,8 +117,11 @@
   <section id="historial" class="panel historial" hidden aria-label="Secuencia de METAR, SPECI y TAF de Ogimet">
     <div class="historial-barra">
       <h2>Historial METAR / SPECI / TAF · <span id="historialOaci"></span></h2>
-      <a id="enlaceOgimet" class="link-metar" href="https://www.ogimet.com/metars.phtml"
-         target="_self" rel="noreferrer">Ver en Ogimet en esta pestaña ↗</a>
+      <div class="acciones-ogimet">
+        <button id="probarFinExacto" type="button" hidden>Intentar hasta la hora final seleccionada</button>
+        <a id="enlaceOgimet" class="link-metar" href="https://www.ogimet.com/metars.phtml"
+           target="_self" rel="noreferrer">Ver en Ogimet en esta pestaña ↗</a>
+      </div>
     </div>
     <p class="historial-nota" id="estadoHistorial" role="status" aria-live="polite">
       Al seleccionar una estación aparecerá debajo la consulta completa de Ogimet.
@@ -156,6 +161,7 @@
   const iframeOgimet = document.getElementById("iframeOgimet");
   const enlaceOgimet = document.getElementById("enlaceOgimet");
   const estadoHistorial = document.getElementById("estadoHistorial");
+  const probarFinExacto = document.getElementById("probarFinExacto");
   let estaciones = [];
   let marcadores = new Map();
 
@@ -221,55 +227,102 @@
       return {error:"La fecha/hora final todavía es futura. Hora actual: "+formatoUTC(ahora)+"."};
     return {inicio,fin};
   }
+  function armarUrlOgimet(icao,inicio,fin) {
+    const q=new URLSearchParams({
+      lugar:icao.toLowerCase(),tipo:"ALL",ord:"REV",nil:"SI",fmt:"html",
+      ano:String(inicio.getUTCFullYear()),mes:String(inicio.getUTCMonth()+1),
+      day:String(inicio.getUTCDate()),hora:String(inicio.getUTCHours()),
+      anof:String(fin.getUTCFullYear()),mesf:String(fin.getUTCMonth()+1),
+      dayf:String(fin.getUTCDate()),horaf:String(fin.getUTCHours()),
+      minf:"59",enviar:"Ver"
+    });
+    return "https://www.ogimet.com/display_metars2.php?"+q.toString();
+  }
   function parametrosOgimet(icao) {
     const periodo=intervaloSeleccionado();
     if(periodo.error)return periodo;
-    // Ogimet puede rechazar una fecha final HH:59 aún no transcurrida
-    // devolviendo «Bad end date argument». Pedimos siempre un período cerrado.
-    // La selección del usuario se conserva y no se modifica por el ajuste.
     const actual=horaUTCEnCurso();
-    const finConsulta=periodo.fin.getTime()===actual.getTime()
-      ?new Date(actual.getTime()-3600000):periodo.fin;
-    if(periodo.inicio.getTime()>finConsulta.getTime()){
-      return {...periodo,error:"Ogimet todavía no tiene un período completo para la hora final elegida. "+
-        "El último METAR disponible aparece en la ficha superior; cuando se complete esta hora UTC "+
-        "podrás consultar sus METAR, SPECI y TAF en Ogimet."};
+    const ahora=new Date();
+    const finOriginal=periodo.fin;
+    let finConsulta=finOriginal;
+    let motivo="";
+    // La hora UTC en curso no terminó: HH:59 podría ser futura.
+    if(finConsulta.getTime()===actual.getTime()){
+      finConsulta=new Date(actual.getTime()-3600000);
+      motivo="hora-en-curso";
     }
-    const q=new URLSearchParams({
-      lugar:icao.toLowerCase(),tipo:"ALL",ord:"REV",nil:"SI",fmt:"html",
-      ano:String(periodo.inicio.getUTCFullYear()),mes:String(periodo.inicio.getUTCMonth()+1),
-      day:String(periodo.inicio.getUTCDate()),hora:String(periodo.inicio.getUTCHours()),
-      anof:String(finConsulta.getUTCFullYear()),mesf:String(finConsulta.getUTCMonth()+1),
-      dayf:String(finConsulta.getUTCDate()),horaf:String(finConsulta.getUTCHours()),
-      minf:"59",enviar:"Ver"
-    });
-    const aviso=finConsulta.getTime()!==periodo.fin.getTime()
-      ?" La hora final elegida está en curso; Ogimet se consulta hasta "+
-        formatoUTC(new Date(finConsulta.getTime()+59*60000))+
-        " para evitar enviar una fecha futura. El METAR más reciente se muestra arriba."
-      :"";
-    return {...periodo,finConsulta,
-      url:"https://www.ogimet.com/display_metars2.php?"+q.toString(),aviso};
+    // Respaldo para el cambio de día de Ogimet: tras las 00Z el servidor
+    // puede tardar en aceptar «dayf=nuevo día, horaf=0, minf=59».
+    // Solo se aplica para las 00 UTC del día de HOY, durante las primeras
+    // tres horas posteriores. No altera consultas históricas anteriores.
+    else if(finConsulta.getUTCHours()===0 &&
+      finConsulta.toISOString().slice(0,10)===ahora.toISOString().slice(0,10) &&
+      ahora.getTime()-finConsulta.getTime()<3*3600000){
+      finConsulta=new Date(finConsulta.getTime()-3600000);
+      motivo="cambio-de-dia";
+    }
+    const urlExacta=finOriginal.getTime()<actual.getTime()
+      ?armarUrlOgimet(icao,periodo.inicio,finOriginal):null;
+    if(periodo.inicio.getTime()>finConsulta.getTime()){
+      return {...periodo,error:"El rango indicado comienza después de la última hora aceptada para la consulta automática de Ogimet.",
+        urlExacta,motivo};
+    }
+    return {...periodo,finConsulta,motivo,urlExacta,
+      url:armarUrlOgimet(icao,periodo.inicio,finConsulta)};
   }
+  // El historial vuelve a mostrarse dentro del mismo iframe del mapa.
+  // La selección permanece idéntica al volver a intentarlo.
+  probarFinExacto.addEventListener("click",()=>{
+    const url=probarFinExacto.dataset.url;
+    if(!url)return;
+    enlaceOgimet.href=url;
+    estadoHistorial.classList.remove("error");
+    estadoHistorial.textContent="Intentando el límite exacto del período elegido en Ogimet. "+
+      "Si aparece «Bad end date argument», su servidor todavía no acepta esa fecha; "+
+      "podés seleccionar la última hora anterior mientras se actualiza.";
+    iframeOgimet.src=url;
+  });
   function mostrarHistorialIntegrado(icao) {
     const consulta=parametrosOgimet(icao);
     historial.hidden=false;
     historialOaci.textContent=icao;
-    if(consulta.error) {
+    probarFinExacto.hidden=true;
+    probarFinExacto.dataset.url="";
+    if(consulta.error){
       estadoHistorial.textContent=consulta.error;
       estadoHistorial.classList.add("error");
       enlaceOgimet.hidden=true;
       iframeOgimet.removeAttribute("src");
+      if(consulta.urlExacta){
+        probarFinExacto.hidden=false;
+        probarFinExacto.dataset.url=consulta.urlExacta;
+      }
       return;
     }
     estadoHistorial.classList.remove("error");
     enlaceOgimet.hidden=false;
     enlaceOgimet.href=consulta.url;
-    estadoHistorial.textContent="Consulta de Ogimet (METAR, SPECI y TAF): "+
-      formatoUTC(consulta.inicio)+" a "+
-      formatoUTC(new Date(consulta.finConsulta.getTime()+59*60000))+"."+
-      consulta.aviso+" Si Ogimet no permite mostrar la página, usá el enlace de respaldo.";
-    if(iframeOgimet.getAttribute("src")!==consulta.url)iframeOgimet.src=consulta.url;
+    const hasta=formatoUTC(new Date(consulta.finConsulta.getTime()+59*60000));
+    if(consulta.motivo==="cambio-de-dia"){
+      estadoHistorial.textContent="Para evitar el posible error de Ogimet después de las 00 UTC, "+
+        "se muestra provisionalmente la secuencia desde "+formatoUTC(consulta.inicio)+
+        " hasta "+hasta+". El período solicitado llega hasta "+
+        formatoUTC(new Date(consulta.fin.getTime()+59*60000))+
+        ". Podés intentar ahora la hora final exacta con el botón superior.";
+    }else if(consulta.motivo==="hora-en-curso"){
+      estadoHistorial.textContent="La hora UTC final sigue en curso. Ogimet se consulta "+
+        "hasta "+hasta+"; el último METAR disponible aparece en la ficha superior.";
+    }else{
+      estadoHistorial.textContent="Consulta de Ogimet (METAR, SPECI y TAF): "+
+        formatoUTC(consulta.inicio)+" a "+hasta+
+        ". Si Ogimet impide mostrar su página, utilizá el enlace de respaldo.";
+    }
+    if(consulta.motivo==="cambio-de-dia"&&consulta.urlExacta){
+      probarFinExacto.hidden=false;
+      probarFinExacto.dataset.url=consulta.urlExacta;
+    }
+    if(iframeOgimet.getAttribute("src")!==consulta.url)
+      iframeOgimet.src=consulta.url;
   }
   function urlOgimet(icao) {return parametrosOgimet(icao).url||null;}
   function botonVerHistorial() {
