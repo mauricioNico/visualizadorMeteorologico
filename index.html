@@ -85,7 +85,7 @@
       <button id="buscar" type="button">Buscar estación</button>
       <button id="actualizar" type="button">Actualizar datos</button>
     </div>
-    <p class="ayuda">El mapa y la ficha de la estación muestran el <strong>último METAR disponible</strong>. Debajo aparece la <strong>secuencia histórica de Ogimet</strong> para el intervalo inicial/final UTC elegido. Por defecto se consultan las últimas 24 horas hasta la última hora UTC completa.</p>
+    <p class="ayuda">El mapa y la ficha de la estación muestran el <strong>último METAR disponible</strong>. Debajo aparece la <strong>secuencia histórica de Ogimet</strong> para el intervalo inicial/final UTC elegido. Por defecto se consultan las últimas 24 horas hasta la hora UTC en curso (solo los minutos transcurridos). A las 21 HOA comienza el día siguiente a las 00 UTC.</p>
   </div>
   <div id="estado" class="panel mensaje" role="status" aria-live="polite">Cargando estaciones y observaciones METAR…</div>
   <div class="contenedor">
@@ -176,9 +176,9 @@
       " "+p(date.getUTCHours())+":"+p(date.getUTCMinutes())+
       (segundos?":"+p(date.getUTCSeconds()):"")+" UTC";
   }
-  function ultimaHoraUTCCompleta() {
-    // A las 00:xx UTC la última hora completada es 23 UTC del día anterior.
-    return new Date(Math.floor(Date.now()/3600000)*3600000-3600000);
+  function horaUTCEnCurso() {
+    // Se admite la hora UTC actual: 21 HOA (UTC-3) corresponde a las 00 UTC del día siguiente.
+    return new Date(Math.floor(Date.now()/3600000)*3600000);
   }
   function valorFechaHoraUTC(fechaId,horaId) {
     const fecha=document.getElementById(fechaId).value;
@@ -200,35 +200,44 @@
         campo.add(new Option(v,v));
       }
     }
-    const fin=ultimaHoraUTCCompleta();
+    const fin=horaUTCEnCurso();
     fijarFechaHoraUTC(new Date(fin.getTime()-86400000),"fechaInicio","horaInicio");
     fijarFechaHoraUTC(fin,"fechaFin","horaFin");
-    document.getElementById("fechaInicio").max=fin.toISOString().slice(0,10);
-    document.getElementById("fechaFin").max=fin.toISOString().slice(0,10);
+    // Sin atributo max estático: el formulario abierto antes de las 00 UTC
+    // también permite elegir el nuevo día. La fecha futura se valida al consultar.
+    document.getElementById("fechaInicio").removeAttribute("max");
+    document.getElementById("fechaFin").removeAttribute("max");
   }
   function parametrosOgimet(icao) {
     const inicio=valorFechaHoraUTC("fechaInicio","horaInicio");
-    let fin=valorFechaHoraUTC("fechaFin","horaFin");
+    const fin=valorFechaHoraUTC("fechaFin","horaFin");
     if(!inicio||!fin)return {error:"Seleccioná fechas y horas UTC válidas."};
-    let aviso="";
-    const completa=ultimaHoraUTCCompleta();
-    // No consultar HH:59 de la hora en curso, todavía no transcurrida.
-    if(fin.getTime()>completa.getTime()){
-      fin=completa;
-      fijarFechaHoraUTC(fin,"fechaFin","horaFin");
-      aviso="La hora final aún no terminó; se ajustó a "+formatoUTC(new Date(fin.getTime()+59*60000))+". ";
-    }
     if(inicio.getTime()>fin.getTime())
-      return {error:"La fecha y hora inicial deben ser anteriores a la final (máximo: "+formatoUTC(completa)+")."};
+      return {error:"La fecha y hora inicial deben ser anteriores o iguales a la final."};
+    const ahora=new Date();
+    const horaActual=horaUTCEnCurso();
+    if(fin.getTime()>horaActual.getTime())
+      return {error:"La hora final seleccionada es futura. Ahora en UTC son las "+
+        formatoUTC(ahora)+". Podés consultar la hora UTC en curso, incluso las 00 UTC del nuevo día."};
+    // Si la hora final está en curso no solicitamos el minuto 59, que sería futuro.
+    // Se dejan 2 min de margen por diferencias de reloj con el servidor de Ogimet.
+    const minutoFin=fin.getTime()===horaActual.getTime()?
+      Math.max(0,ahora.getUTCMinutes()-2):59;
+    const finEfectivo=new Date(fin.getTime()+minutoFin*60000);
     const query=new URLSearchParams({
       lugar:icao.toLowerCase(),tipo:"ALL",ord:"REV",nil:"SI",fmt:"html",
       ano:String(inicio.getUTCFullYear()),mes:String(inicio.getUTCMonth()+1),
       day:String(inicio.getUTCDate()),hora:String(inicio.getUTCHours()),
       anof:String(fin.getUTCFullYear()),mesf:String(fin.getUTCMonth()+1),
       dayf:String(fin.getUTCDate()),horaf:String(fin.getUTCHours()),
-      minf:"59",enviar:"Ver"
+      minf:String(minutoFin),enviar:"Ver"
     });
-    return {url:"https://www.ogimet.com/display_metars2.php?"+query.toString(),inicio,fin,aviso};
+    return {
+      url:"https://www.ogimet.com/display_metars2.php?"+query.toString(),
+      inicio,fin,finEfectivo,
+      aviso:fin.getTime()===horaActual.getTime()?
+        "Consulta de la hora UTC en curso, hasta el minuto ya transcurrido. ":""
+    };
   }
   function urlOgimet(icao) { return parametrosOgimet(icao).url||null; }
   // Reutilizamos el mismo panel de resultados para cada estación seleccionada,
@@ -248,7 +257,7 @@
     enlaceOgimet.hidden=false;
     enlaceOgimet.href=consulta.url;
     estadoHistorial.textContent="Secuencia: "+formatoUTC(consulta.inicio)+" a "+
-      formatoUTC(new Date(consulta.fin.getTime()+59*60000))+". "+
+      formatoUTC(consulta.finEfectivo)+". "+
       consulta.aviso+
       "Si Ogimet bloquea el iframe, usá el enlace de respaldo en esta misma pestaña.";
     if(iframeOgimet.getAttribute("src")!==consulta.url)iframeOgimet.src=consulta.url;
