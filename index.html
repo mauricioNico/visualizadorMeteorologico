@@ -216,7 +216,7 @@
     if(fin.getTime()>completa.getTime()){
       fin=completa;
       fijarFechaHoraUTC(fin,"fechaFin","horaFin");
-      aviso="La hora final aún no terminó; se ajustó a "+formatoUTC(fin).replace(" UTC",":59 UTC")+". ";
+      aviso="La hora final aún no terminó; se ajustó a "+formatoUTC(new Date(fin.getTime()+59*60000))+". ";
     }
     if(inicio.getTime()>fin.getTime())
       return {error:"La fecha y hora inicial deben ser anteriores a la final (máximo: "+formatoUTC(completa)+")."};
@@ -248,7 +248,7 @@
     enlaceOgimet.hidden=false;
     enlaceOgimet.href=consulta.url;
     estadoHistorial.textContent="Secuencia: "+formatoUTC(consulta.inicio)+" a "+
-      formatoUTC(consulta.fin).replace(" UTC",":59 UTC")+". "+
+      formatoUTC(new Date(consulta.fin.getTime()+59*60000))+". "+
       consulta.aviso+
       "Si Ogimet bloquea el iframe, usá el enlace de respaldo en esta misma pestaña.";
     if(iframeOgimet.getAttribute("src")!==consulta.url)iframeOgimet.src=consulta.url;
