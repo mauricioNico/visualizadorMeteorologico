@@ -58,6 +58,16 @@
     .historial-visor iframe{display:block;width:100%;height:min(75vh,750px);min-height:510px;border:0;background:#fff}
     .boton-historial{width:100%;margin-top:9px}
     .historial-nota{font-size:13px;line-height:1.45;color:#51667c;margin:10px 0 0}
+    [hidden]{display:none!important}
+    .historial-acciones{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    .historial-acciones button{min-height:38px;font-size:13px}
+    .historial-acciones button:disabled{opacity:.56;cursor:not-allowed}
+    .secuencia-local{margin-top:12px;display:grid;gap:8px}
+    .secuencia-registro{padding:10px 12px;background:#f6f9fd;border:1px solid var(--line);border-radius:9px}
+    .secuencia-registro strong{display:block;font-size:12px;color:#295078;margin-bottom:5px}
+    .secuencia-registro pre{font:12px/1.55 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+    .secuencia-vacia{margin:0;border:1px dashed #b1c1d0;padding:12px;border-radius:9px;font-size:13px;color:#567086}
+
     footer{text-align:center;color:#607183;font-size:12px;padding:0 12px 24px}
     @media(max-width:920px){.contenedor{grid-template-columns:1fr}aside{grid-template-columns:1fr}.detalle-datos{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:600px){main{padding:9px}#mapa{height:65vh;min-height:390px}.controles>*{flex:1 1 135px}.controles button{flex:0 0 auto}.detalle-datos{gap:7px}.detalle-dato{padding:9px}.detalle-dato span{font-size:12px}}
@@ -85,7 +95,7 @@
       <button id="buscar" type="button">Buscar estación</button>
       <button id="actualizar" type="button">Actualizar datos</button>
     </div>
-    <p class="ayuda">El mapa y la ficha de la estación muestran el <strong>último METAR disponible</strong>. Debajo aparece la <strong>secuencia histórica de Ogimet</strong> para el intervalo inicial/final UTC elegido. Por defecto se consultan las últimas 24 horas hasta la hora UTC en curso (solo los minutos transcurridos). A las 21 HOA comienza el día siguiente a las 00 UTC.</p>
+    <p class="ayuda">El mapa muestra el <strong>último METAR disponible</strong>. Debajo de la ficha aparece la <strong>secuencia de observaciones recientes (NOAA)</strong>, archivada por el visualizador hasta 48 horas. Para períodos completos también podés cargar Ogimet opcionalmente. A las 21 HOA comienza el día siguiente a las 00 UTC.</p>
   </div>
   <div id="estado" class="panel mensaje" role="status" aria-live="polite">Cargando estaciones y observaciones METAR…</div>
   <div class="contenedor">
@@ -110,18 +120,22 @@
       </section>
     </aside>
   </div>
-  <section id="historial" class="panel historial" hidden aria-label="Resultados históricos de Ogimet">
+  <section id="historial" class="panel historial" hidden aria-label="Secuencia de observaciones METAR">
     <div class="historial-barra">
-      <h2>Historial METAR · <span id="historialOaci"></span></h2>
-      <a id="enlaceOgimet" class="link-metar" href="https://www.ogimet.com/metars.phtml"
-         target="_self" rel="noreferrer">Ver en Ogimet en esta pestaña ↗</a>
+      <h2>Secuencia METAR · <span id="historialOaci"></span></h2>
+      <div class="historial-acciones">
+        <button id="cargarOgimet" type="button" disabled>Consultar Ogimet</button>
+        <a id="enlaceOgimet" class="link-metar" href="https://www.ogimet.com/metars.phtml"
+           target="_self" rel="noreferrer" hidden>Ver en Ogimet en esta pestaña ↗</a>
+      </div>
     </div>
     <p class="historial-nota" id="estadoHistorial" role="status" aria-live="polite">
-      Elegí una estación para consultar su secuencia histórica.
+      Seleccioná una estación para consultar la secuencia disponible.
     </p>
-    <div class="historial-visor">
-      <iframe id="iframeOgimet" title="Resultados históricos METAR de Ogimet"
-              referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    <div id="secuenciaLocal" class="secuencia-local" aria-live="polite"></div>
+    <div class="historial-visor" id="visorOgimetExterno" hidden>
+      <iframe id="iframeOgimet" title="Consulta complementaria al historial de Ogimet"
+              loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
   </section>
 </main>
@@ -154,6 +168,10 @@
   const iframeOgimet = document.getElementById("iframeOgimet");
   const enlaceOgimet = document.getElementById("enlaceOgimet");
   const estadoHistorial = document.getElementById("estadoHistorial");
+  const secuenciaLocal = document.getElementById("secuenciaLocal");
+  const visorOgimetExterno = document.getElementById("visorOgimetExterno");
+  const botonOgimet = document.getElementById("cargarOgimet");
+  let secuenciaMetar = [];
   let estaciones = [];
   let marcadores = new Map();
 
@@ -208,60 +226,99 @@
     document.getElementById("fechaInicio").removeAttribute("max");
     document.getElementById("fechaFin").removeAttribute("max");
   }
-  function parametrosOgimet(icao) {
+  function intervaloSeleccionado() {
     const inicio=valorFechaHoraUTC("fechaInicio","horaInicio");
     const fin=valorFechaHoraUTC("fechaFin","horaFin");
     if(!inicio||!fin)return {error:"Seleccioná fechas y horas UTC válidas."};
     if(inicio.getTime()>fin.getTime())
       return {error:"La fecha y hora inicial deben ser anteriores o iguales a la final."};
     const ahora=new Date();
-    const horaActual=horaUTCEnCurso();
-    if(fin.getTime()>horaActual.getTime())
-      return {error:"La hora final seleccionada es futura. Ahora en UTC son las "+
-        formatoUTC(ahora)+". Podés consultar la hora UTC en curso, incluso las 00 UTC del nuevo día."};
-    // Si la hora final está en curso no solicitamos el minuto 59, que sería futuro.
-    // Se dejan 2 min de margen por diferencias de reloj con el servidor de Ogimet.
-    const minutoFin=fin.getTime()===horaActual.getTime()?
-      Math.max(0,ahora.getUTCMinutes()-2):59;
-    const finEfectivo=new Date(fin.getTime()+minutoFin*60000);
-    const query=new URLSearchParams({
+    if(inicio.getTime()>ahora.getTime())
+      return {error:"El inicio del período es futuro."};
+    if(fin.getTime()>horaUTCEnCurso().getTime())
+      return {error:"La hora final seleccionada es futura. Hora actual: "+formatoUTC(ahora)+"."};
+    const finEfectivo=new Date(Math.min(fin.getTime()+3600000-1,ahora.getTime()));
+    return {inicio,fin,finEfectivo};
+  }
+  function parametrosOgimet(icao) {
+    const periodo=intervaloSeleccionado();
+    if(periodo.error)return periodo;
+    // Ogimet puede rechazar fechas finales durante la hora UTC en curso.
+    // Para la hora actual se usa la secuencia NOAA publicada, sin forzar
+    // parámetros minf=0..58 que no estaban validados con su formulario.
+    if(periodo.fin.getTime()===horaUTCEnCurso().getTime())
+      return {...periodo,pendiente:true};
+    const inicio=periodo.inicio,fin=periodo.fin;
+    const q=new URLSearchParams({
       lugar:icao.toLowerCase(),tipo:"ALL",ord:"REV",nil:"SI",fmt:"html",
       ano:String(inicio.getUTCFullYear()),mes:String(inicio.getUTCMonth()+1),
       day:String(inicio.getUTCDate()),hora:String(inicio.getUTCHours()),
       anof:String(fin.getUTCFullYear()),mesf:String(fin.getUTCMonth()+1),
       dayf:String(fin.getUTCDate()),horaf:String(fin.getUTCHours()),
-      minf:String(minutoFin),enviar:"Ver"
+      minf:"59",enviar:"Ver"
     });
-    return {
-      url:"https://www.ogimet.com/display_metars2.php?"+query.toString(),
-      inicio,fin,finEfectivo,
-      aviso:fin.getTime()===horaActual.getTime()?
-        "Consulta de la hora UTC en curso, hasta el minuto ya transcurrido. ":""
-    };
+    return {...periodo,url:"https://www.ogimet.com/display_metars2.php?"+q.toString()};
   }
-  function urlOgimet(icao) { return parametrosOgimet(icao).url||null; }
-  // Reutilizamos el mismo panel de resultados para cada estación seleccionada,
-  // sin abrir pestañas ni perder el mapa o sus controles.
+  function mostrarSecuenciaLocal(icao,periodo) {
+    secuenciaLocal.replaceChildren();
+    if(periodo.error)return;
+    const observaciones=secuenciaMetar.filter(r=>
+      r && r.icao===icao && typeof r.raw==="string" &&
+      typeof r.time==="string" && Number.isFinite(Date.parse(r.time)) &&
+      Date.parse(r.time)>=periodo.inicio.getTime() &&
+      Date.parse(r.time)<=periodo.finEfectivo.getTime()
+    ).sort((a,b)=>Date.parse(b.time)-Date.parse(a.time));
+    const vistas=new Set();
+    let total=0;
+    for(const r of observaciones){
+      const clave=r.time+"|"+r.raw;
+      if(vistas.has(clave))continue;
+      vistas.add(clave);
+      total++;
+      if(total>180)break;
+      const bloque=el("div",undefined,"secuencia-registro");
+      bloque.append(el("strong",formatoUTC(new Date(r.time))));
+      bloque.append(el("pre",r.raw));
+      secuenciaLocal.append(bloque);
+    }
+    if(!total){
+      secuenciaLocal.append(el("p","Todavía no hay reportes archivados para esta estación en el intervalo elegido. El historial NOAA se actualiza periódicamente y se conserva hasta 48 horas.","secuencia-vacia"));
+    }
+  }
   function mostrarHistorialIntegrado(icao) {
     const consulta=parametrosOgimet(icao);
     historial.hidden=false;
     historialOaci.textContent=icao;
-    if(!consulta.url){
+    estadoHistorial.classList.toggle("error",!!consulta.error);
+    visorOgimetExterno.hidden=true;
+    iframeOgimet.removeAttribute("src");
+    enlaceOgimet.hidden=true;
+    botonOgimet.disabled=!consulta.url;
+    botonOgimet.dataset.url=consulta.url||"";
+    if(consulta.error){
       estadoHistorial.textContent=consulta.error;
-      estadoHistorial.classList.add("error");
-      enlaceOgimet.hidden=true;
-      iframeOgimet.removeAttribute("src");
+      secuenciaLocal.replaceChildren();
       return;
     }
-    estadoHistorial.classList.remove("error");
-    enlaceOgimet.hidden=false;
-    enlaceOgimet.href=consulta.url;
-    estadoHistorial.textContent="Secuencia: "+formatoUTC(consulta.inicio)+" a "+
-      formatoUTC(consulta.finEfectivo)+". "+
-      consulta.aviso+
-      "Si Ogimet bloquea el iframe, usá el enlace de respaldo en esta misma pestaña.";
-    if(iframeOgimet.getAttribute("src")!==consulta.url)iframeOgimet.src=consulta.url;
+    mostrarSecuenciaLocal(icao,consulta);
+    estadoHistorial.textContent="Observaciones NOAA disponibles entre "+
+      formatoUTC(consulta.inicio)+" y "+formatoUTC(consulta.finEfectivo)+". "+
+      (consulta.pendiente
+        ?"La hora UTC actual se consulta con los METAR archivados aquí; Ogimet estará disponible al finalizar la hora."
+        :"Si necesitás registros anteriores o adicionales, podés consultar Ogimet debajo.");
+    if(consulta.url){
+      enlaceOgimet.hidden=false;
+      enlaceOgimet.href=consulta.url;
+    }
   }
+  botonOgimet.addEventListener("click",()=>{
+    const url=botonOgimet.dataset.url;
+    if(!url)return;
+    visorOgimetExterno.hidden=false;
+    if(iframeOgimet.getAttribute("src")!==url)iframeOgimet.src=url;
+    visorOgimetExterno.scrollIntoView({behavior:"smooth",block:"start"});
+  });
+  function urlOgimet(icao) { return parametrosOgimet(icao).url||null; }
   function botonVerHistorial() {
     const boton = el("button","Ver historial debajo del mapa ↓","boton-historial");
     boton.type = "button";
@@ -350,7 +407,13 @@
       if(!Array.isArray(json.stations)||json.stations.length===0)
         throw Error("Todavía no hay observaciones publicadas. Debe ejecutarse la actualización de datos.");
       estaciones=json.stations;
+      // Al iniciar la serie puede no existir "history": conservar al menos
+      // el último METAR de cada estación, sin inventar datos históricos.
+      secuenciaMetar=Array.isArray(json.history)&&json.history.length?
+        json.history:json.stations.map(r=>({icao:r.icao,time:r.time,raw:r.raw}));
       const actuales=repintar();
+      const seleccionada=estaciones.find(x=>x.icao===input.value.trim().toUpperCase());
+      if(seleccionada)dibujarDetalle(seleccionada);
       const publicado=json.generatedAt?formatoUTC(new Date(json.generatedAt),true):"sin fecha";
       const demora=json.generatedAt ? Math.round((Date.now()-Date.parse(json.generatedAt))/60000) : Infinity;
       const aviso=demora>90?" · Actualización demorada":"";
