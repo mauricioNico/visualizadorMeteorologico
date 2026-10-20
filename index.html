@@ -77,13 +77,15 @@
       <div><label for="region">Región</label><select id="region">
         <option value="sur">Sur de Sudamérica</option><option value="norte">Norte de Argentina y países limítrofes</option><option value="antartida">Antártida</option>
       </select></div>
-      <div><label for="fecha">Fecha de consulta (UTC)</label><input type="date" id="fecha" required></div>
-      <div><label for="hora">Hora final (UTC)</label><select id="hora"></select></div>
+      <div><label for="fechaInicio">Fecha inicial (UTC)</label><input type="date" id="fechaInicio" required></div>
+      <div><label for="horaInicio">Hora inicial (UTC)</label><select id="horaInicio"></select></div>
+      <div><label for="fechaFin">Fecha final (UTC)</label><input type="date" id="fechaFin" required></div>
+      <div><label for="horaFin">Hora final (UTC)</label><select id="horaFin"></select></div>
       <div><label for="oaci">Estación (OACI)</label><input id="oaci" list="codigosOaci" maxlength="4" placeholder="SAZN" autocomplete="off" aria-label="Código OACI de estación"><datalist id="codigosOaci"></datalist></div>
       <button id="buscar" type="button">Buscar estación</button>
       <button id="actualizar" type="button">Actualizar datos</button>
     </div>
-    <p class="ayuda">Los colores muestran el <strong>último METAR publicado</strong>, no la fecha histórica elegida. Al seleccionar una estación, su consulta de 24 horas en Ogimet aparece <strong>debajo del mapa en esta misma página</strong>, con la fecha y hora UTC elegidas. Los datos no recientes se muestran en gris.</p>
+    <p class="ayuda">El mapa y la ficha de la estación muestran el <strong>último METAR disponible</strong>. Debajo aparece la <strong>secuencia histórica de Ogimet</strong> para el intervalo inicial/final UTC elegido. Por defecto se consultan las últimas 24 horas hasta la última hora UTC completa.</p>
   </div>
   <div id="estado" class="panel mensaje" role="status" aria-live="polite">Cargando estaciones y observaciones METAR…</div>
   <div class="contenedor">
@@ -105,7 +107,6 @@
         <div class="leyenda-item"><span class="punto-leyenda" style="background:red"></span><strong>Rojo</strong><span>Visibilidad &lt; 800 m o techo &lt; 200 pies.</span></div>
         <div class="leyenda-item"><span class="punto-leyenda" style="background:black"></span><strong>Negro</strong><span>Cierre explícitamente comunicado en el reporte (ej. SNOCLO).</span></div>
         <div class="leyenda-item"><span class="punto-leyenda" style="background:#888"></span><strong>Gris</strong><span>Sin suficientes datos o reporte con más de 3 horas.</span></div>
-        <p class="ayuda">Clasificación experimental inspirada en Ogimet. No equivale a una categoría oficial de vuelo ni a una autorización operacional.</p>
       </section>
     </aside>
   </div>
@@ -115,9 +116,8 @@
       <a id="enlaceOgimet" class="link-metar" href="https://www.ogimet.com/metars.phtml"
          target="_self" rel="noreferrer">Ver en Ogimet en esta pestaña ↗</a>
     </div>
-    <p class="historial-nota" id="estadoHistorial" role="status">
-      La consulta de Ogimet aparece dentro del visualizador. Si el servidor impide
-      mostrarla aquí, usá el enlace de respaldo para verla en esta misma pestaña.
+    <p class="historial-nota" id="estadoHistorial" role="status" aria-live="polite">
+      Elegí una estación para consultar su secuencia histórica.
     </p>
     <div class="historial-visor">
       <iframe id="iframeOgimet" title="Resultados históricos METAR de Ogimet"
@@ -169,21 +169,58 @@
   function encuadrar(region) {
     mapa.fitBounds(regiones[region] || regiones.sur,{padding:[12,12]});
   }
-  function fechaUTC() {
-    const d = new Date();
-    document.getElementById("fecha").value=d.toISOString().slice(0,10);
-    const hora=document.getElementById("hora");
-    for(let h=0;h<24;h++){const v=String(h).padStart(2,"0");hora.add(new Option(v,v));}
-    hora.value=String(d.getUTCHours()).padStart(2,"0");
+  function formatoUTC(date,segundos=false) {
+    if (!(date instanceof Date)||!Number.isFinite(date.getTime()))return "sin fecha";
+    const p=n=>String(n).padStart(2,"0");
+    return p(date.getUTCDate())+"/"+p(date.getUTCMonth()+1)+"/"+date.getUTCFullYear()+
+      " "+p(date.getUTCHours())+":"+p(date.getUTCMinutes())+
+      (segundos?":"+p(date.getUTCSeconds()):"")+" UTC";
   }
-  function urlOgimet(icao) {
-    const fecha = document.getElementById("fecha").value;
-    const hora = Number(document.getElementById("hora").value);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return null;
-    const fin = new Date(fecha+"T"+String(hora).padStart(2,"0")+":00:00Z");
-    if (!Number.isFinite(fin.getTime())) return null;
-    const inicio = new Date(fin.getTime() - 86400000);
-    const q = new URLSearchParams({
+  function ultimaHoraUTCCompleta() {
+    // A las 00:xx UTC la última hora completada es 23 UTC del día anterior.
+    return new Date(Math.floor(Date.now()/3600000)*3600000-3600000);
+  }
+  function valorFechaHoraUTC(fechaId,horaId) {
+    const fecha=document.getElementById(fechaId).value;
+    const hora=document.getElementById(horaId).value;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha)||!/^(?:0\d|1\d|2[0-3])$/.test(hora))return null;
+    const d=new Date(fecha+"T"+hora+":00:00Z");
+    if(!Number.isFinite(d.getTime())||d.toISOString().slice(0,10)!==fecha)return null;
+    return d;
+  }
+  function fijarFechaHoraUTC(date,fechaId,horaId) {
+    document.getElementById(fechaId).value=date.toISOString().slice(0,10);
+    document.getElementById(horaId).value=String(date.getUTCHours()).padStart(2,"0");
+  }
+  function fechaUTC() {
+    for(const id of ["horaInicio","horaFin"]){
+      const campo=document.getElementById(id);
+      for(let h=0;h<24;h++){
+        const v=String(h).padStart(2,"0");
+        campo.add(new Option(v,v));
+      }
+    }
+    const fin=ultimaHoraUTCCompleta();
+    fijarFechaHoraUTC(new Date(fin.getTime()-86400000),"fechaInicio","horaInicio");
+    fijarFechaHoraUTC(fin,"fechaFin","horaFin");
+    document.getElementById("fechaInicio").max=fin.toISOString().slice(0,10);
+    document.getElementById("fechaFin").max=fin.toISOString().slice(0,10);
+  }
+  function parametrosOgimet(icao) {
+    const inicio=valorFechaHoraUTC("fechaInicio","horaInicio");
+    let fin=valorFechaHoraUTC("fechaFin","horaFin");
+    if(!inicio||!fin)return {error:"Seleccioná fechas y horas UTC válidas."};
+    let aviso="";
+    const completa=ultimaHoraUTCCompleta();
+    // No consultar HH:59 de la hora en curso, todavía no transcurrida.
+    if(fin.getTime()>completa.getTime()){
+      fin=completa;
+      fijarFechaHoraUTC(fin,"fechaFin","horaFin");
+      aviso="La hora final aún no terminó; se ajustó a "+formatoUTC(fin).replace(" UTC",":59 UTC")+". ";
+    }
+    if(inicio.getTime()>fin.getTime())
+      return {error:"La fecha y hora inicial deben ser anteriores a la final (máximo: "+formatoUTC(completa)+")."};
+    const query=new URLSearchParams({
       lugar:icao.toLowerCase(),tipo:"ALL",ord:"REV",nil:"SI",fmt:"html",
       ano:String(inicio.getUTCFullYear()),mes:String(inicio.getUTCMonth()+1),
       day:String(inicio.getUTCDate()),hora:String(inicio.getUTCHours()),
@@ -191,27 +228,30 @@
       dayf:String(fin.getUTCDate()),horaf:String(fin.getUTCHours()),
       minf:"59",enviar:"Ver"
     });
-    return "https://www.ogimet.com/display_metars2.php?"+q.toString();
+    return {url:"https://www.ogimet.com/display_metars2.php?"+query.toString(),inicio,fin,aviso};
   }
+  function urlOgimet(icao) { return parametrosOgimet(icao).url||null; }
   // Reutilizamos el mismo panel de resultados para cada estación seleccionada,
   // sin abrir pestañas ni perder el mapa o sus controles.
   function mostrarHistorialIntegrado(icao) {
-    const url = urlOgimet(icao);
-    if (!url) {
-      historial.hidden = true;
+    const consulta=parametrosOgimet(icao);
+    historial.hidden=false;
+    historialOaci.textContent=icao;
+    if(!consulta.url){
+      estadoHistorial.textContent=consulta.error;
+      estadoHistorial.classList.add("error");
+      enlaceOgimet.hidden=true;
       iframeOgimet.removeAttribute("src");
       return;
     }
-    historial.hidden = false;
-    historialOaci.textContent = icao;
-    enlaceOgimet.href = url;
-    if (iframeOgimet.getAttribute("src") !== url) {
-      estadoHistorial.textContent =
-        "Consulta histórica de " + icao +
-        " (período seleccionado arriba, en UTC). Si Ogimet bloquea su visualización incrustada, " +
-        "podés verla desde el enlace de respaldo, sin abrir una pestaña nueva.";
-      iframeOgimet.src = url;
-    }
+    estadoHistorial.classList.remove("error");
+    enlaceOgimet.hidden=false;
+    enlaceOgimet.href=consulta.url;
+    estadoHistorial.textContent="Secuencia: "+formatoUTC(consulta.inicio)+" a "+
+      formatoUTC(consulta.fin).replace(" UTC",":59 UTC")+". "+
+      consulta.aviso+
+      "Si Ogimet bloquea el iframe, usá el enlace de respaldo en esta misma pestaña.";
+    if(iframeOgimet.getAttribute("src")!==consulta.url)iframeOgimet.src=consulta.url;
   }
   function botonVerHistorial() {
     const boton = el("button","Ver historial debajo del mapa ↓","boton-historial");
@@ -302,9 +342,11 @@
         throw Error("Todavía no hay observaciones publicadas. Debe ejecutarse la actualización de datos.");
       estaciones=json.stations;
       const actuales=repintar();
-      const publicado=json.generatedAt?new Date(json.generatedAt).toLocaleString("es-AR",{timeZone:"UTC"}):"sin fecha";
+      const publicado=json.generatedAt?formatoUTC(new Date(json.generatedAt),true):"sin fecha";
       const demora=json.generatedAt ? Math.round((Date.now()-Date.parse(json.generatedAt))/60000) : Infinity;
-      enviarEstado(estaciones.length+" estaciones con observaciones · "+actuales+" recientes · Datos generados: "+publicado+" UTC"+(demora>90?" · Actualización demorada":""),demora>90);
+      const aviso=demora>90?" · Actualización demorada":"";
+      enviarEstado("METAR disponibles: "+estaciones.length+" estaciones · "+
+        actuales+" observaciones de las últimas 3 horas · Archivo actualizado: "+publicado+aviso,demora>90);
     }catch(err){
       enviarEstado("No fue posible cargar METAR actuales: "+err.message+". El mapa de fondo sigue disponible y el formulario OACI del visualizador anterior permanece operativo.",true);
     }
@@ -326,7 +368,7 @@
   document.getElementById("buscar").addEventListener("click",buscar);
   document.getElementById("actualizar").addEventListener("click",cargar);
   input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscar();}});
-  for(const id of ["fecha","hora"]) document.getElementById(id).addEventListener("change",()=>{
+  for(const id of ["fechaInicio","horaInicio","fechaFin","horaFin"]) document.getElementById(id).addEventListener("change",()=>{
     const s=estaciones.find(x=>x.icao===input.value.trim().toUpperCase());
     if(s)dibujarDetalle(s);
     else if(input.value.trim().length===4)buscar();
