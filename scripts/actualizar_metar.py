@@ -144,18 +144,57 @@ def obtener_xml():
 def construir(xml: bytes):
     raiz = ET.fromstring(xml)
     por_codigo = {}
+    observaciones = []
     for nodo in raiz.iter("METAR"):
         registro = procesar(nodo)
         if registro:
             previo = por_codigo.get(registro["icao"])
             if previo is None or registro["time"] > previo["time"]:
                 por_codigo[registro["icao"]] = registro
+            observaciones.append({
+                "icao": registro["icao"],
+                "time": registro["time"],
+                "raw": registro["raw"],
+            })
     if len(por_codigo) < 30:
         raise RuntimeError(f"Se encontraron solo {len(por_codigo)} METAR válidos; no se publican datos incompletos.")
+
+    # Conservar hasta 48 h de secuencia METAR local para no depender
+    # de una URL de Ogimet durante la hora UTC en curso.
+    ahora = datetime.now(timezone.utc)
+    inicio = ahora.timestamp() - 48 * 3600
+    fin = ahora.timestamp() + 600
+    if DESTINO.exists():
+        try:
+            previo = json.loads(DESTINO.read_text(encoding="utf-8"))
+            anteriores = previo.get("history", [])
+            if isinstance(anteriores, list):
+                observaciones.extend(anteriores)
+        except (OSError, ValueError, TypeError):
+            pass
+    observaciones_unicas = {}
+    for obs in observaciones:
+        if not isinstance(obs, dict):
+            continue
+        codigo, fecha, texto = obs.get("icao"), obs.get("time"), obs.get("raw")
+        if not isinstance(codigo, str) or not re.fullmatch(r"[A-Z]{4}", codigo):
+            continue
+        if not isinstance(texto, str) or not texto.strip() or not isinstance(fecha, str):
+            continue
+        try:
+            instante = datetime.fromisoformat(fecha.replace("Z", "+00:00"))
+            if instante.tzinfo is None or not inicio <= instante.timestamp() <= fin:
+                continue
+        except ValueError:
+            continue
+        clave = (codigo, instante.isoformat(), texto)
+        observaciones_unicas[clave] = {"icao": codigo, "time": instante.isoformat().replace("+00:00", "Z"), "raw": texto[:400]}
+    historial = sorted(observaciones_unicas.values(), key=lambda r: (r["icao"], r["time"], r["raw"]))
     return {
         "source": "NOAA Aviation Weather Center - metars.cache.xml.gz",
-        "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "generatedAt": ahora.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "stations": sorted(por_codigo.values(), key=lambda dato: dato["icao"]),
+        "history": historial,
     }
 
 
