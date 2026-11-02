@@ -222,14 +222,15 @@
     return {inicio,fin};
   }
   function armarUrlOgimet(icao,inicio,fin) {
-    // OGIMET necesita hora y horaf en dos dígitos (01 / 00, no 1 / 0).
-    const horaDosDigitos=n=>String(n).padStart(2,"0");
+    // OGIMET: día, mes y hora siempre con dos dígitos (01 / 00).
+    const dosDigitos=n=>String(n).padStart(2,"0");
     const q=new URLSearchParams({
       lugar:icao.toLowerCase(),tipo:"ALL",ord:"REV",nil:"SI",fmt:"html",
-      ano:String(inicio.getUTCFullYear()),mes:String(inicio.getUTCMonth()+1),
-      day:String(inicio.getUTCDate()),hora:horaDosDigitos(inicio.getUTCHours()),
-      anof:String(fin.getUTCFullYear()),mesf:String(fin.getUTCMonth()+1),
-      dayf:String(fin.getUTCDate()),horaf:horaDosDigitos(fin.getUTCHours()),
+      ano:String(inicio.getUTCFullYear()),mes:dosDigitos(inicio.getUTCMonth()+1),
+      day:dosDigitos(inicio.getUTCDate()),hora:dosDigitos(inicio.getUTCHours()),
+      min:"00",
+      anof:String(fin.getUTCFullYear()),mesf:dosDigitos(fin.getUTCMonth()+1),
+      dayf:dosDigitos(fin.getUTCDate()),horaf:dosDigitos(fin.getUTCHours()),
       minf:"59",enviar:"Ver"
     });
     return "https://www.ogimet.com/display_metars2.php?"+q.toString();
