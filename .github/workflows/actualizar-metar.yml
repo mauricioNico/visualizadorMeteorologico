@@ -1,13 +1,15 @@
 name: Actualizar METAR del mapa interactivo
 
 on:
+  # Varios intentos por hora, desplazados del minuto 0 (GitHub puede demorar u omitir cron).
   schedule:
-    - cron: "17,47 * * * *"
+    - cron: "7,17,27,37,47,57 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - "scripts/actualizar_metar.py"
+      - "tests/test_actualizar_metar.py"
       - ".github/workflows/actualizar-metar.yml"
 
 permissions:
@@ -20,24 +22,44 @@ concurrency:
 jobs:
   publicar:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 12
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
         with:
           persist-credentials: true
 
-      - name: Actualizar cache METAR NOAA
+      - name: Verificar procesamiento y estaciones fijas
+        run: python3 -m unittest discover -s tests -p "test_actualizar_metar.py" -v
+
+      - name: Descargar y validar cache METAR de NOAA (con reintentos)
         run: python3 scripts/actualizar_metar.py
 
-      - name: Publicar JSON en GitHub Pages
+      - name: Publicar JSON con reintentos ante cambios simultáneos
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/
           if git diff --cached --quiet; then
-            echo "Sin cambios."
+            echo "Sin cambios en datos. No se necesita publicar."
             exit 0
           fi
           git commit -m "data: actualizar observaciones METAR del mapa [skip ci]"
-          git push origin HEAD:main
+          for intento in 1 2 3 4; do
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "::error::Conflicto al integrar cambios de main."
+              exit 1
+            fi
+            if git push origin HEAD:main; then
+              echo "METAR publicados en main (intento $intento)."
+              exit 0
+            fi
+            echo "::warning::Push concurrente; reintentando ($intento/4)."
+            sleep 4
+          done
+          echo "::error::No se pudo publicar data/metar_latest.json después de 4 intentos."
+          exit 1
