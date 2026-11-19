@@ -9,6 +9,7 @@ from __future__ import annotations
 import gzip
 import json
 import re
+import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -20,6 +21,18 @@ MAX_BYTES_GZIP = 16 * 1024 * 1024
 MAX_BYTES_XML = 100 * 1024 * 1024
 GEOREF_URL = "https://apis.datos.gob.ar/georef/api/v2.0/provincias.geojson"
 PROVINCIAS = DESTINO.parent / "provincias.geojson"
+
+# Estaciones publicadas en la AIP/catálogo oficial que deben permanecer en el mapa
+# aunque AWC no tenga un METAR en su instantánea actual.
+# Fuente SADJ: Ministerio de Transporte, registro de aeródromos.
+ESTACIONES_PERMANENTES = {
+    "SADJ": {"icao": "SADJ", "name": "Mariano Moreno / VII Brigada Aérea",
+             "lat": -34.560000, "lon": -58.78972222},
+}
+FRESCURA_MAXIMA_SEGUNDOS = 3 * 3600
+OBSERVACIONES_MINIMAS_RECIENTES = 20
+ESPERAS_DESCARGA = (0, 4, 12, 24)
+
 
 
 def numero(valor):
@@ -126,22 +139,69 @@ def procesar(metar):
 
 
 def obtener_xml():
-    peticion = urllib.request.Request(URL, headers={
-        "User-Agent": "VisualizadorMeteorologico/1.0 (https://github.com/mauricioNico/visualizadorMeteorologico)",
-        "Accept": "application/gzip,application/octet-stream",
-    })
-    with urllib.request.urlopen(peticion, timeout=50) as respuesta:
-        contenido = respuesta.read(MAX_BYTES_GZIP + 1)
-    if len(contenido) > MAX_BYTES_GZIP:
-        raise RuntimeError("El archivo comprimido excedió el tamaño de seguridad.")
-    if contenido[:2] == b"\x1f\x8b":
-        contenido = gzip.decompress(contenido)
-    if len(contenido) > MAX_BYTES_XML:
-        raise RuntimeError("El XML excedió el tamaño de seguridad.")
-    return contenido
+    """Descarga el cache oficial; reintenta errores HTTP y respuestas truncadas."""
+    ultimo_error = None
+    for intento, pausa in enumerate(ESPERAS_DESCARGA, start=1):
+        if pausa:
+            print(f"AWC: esperando {pausa} s antes del intento {intento}", flush=True)
+            time.sleep(pausa)
+        try:
+            peticion = urllib.request.Request(URL, headers={
+                "User-Agent": "VisualizadorMeteorologico/1.1 (https://github.com/mauricioNico/visualizadorMeteorologico)",
+                "Accept": "application/gzip,application/octet-stream",
+                "Cache-Control": "no-cache",
+            })
+            with urllib.request.urlopen(peticion, timeout=35) as respuesta:
+                contenido = respuesta.read(MAX_BYTES_GZIP + 1)
+            if len(contenido) > MAX_BYTES_GZIP:
+                raise RuntimeError("El archivo comprimido excedió el tamaño permitido")
+            if contenido[:2] == b"\x1f\x8b":
+                contenido = gzip.decompress(contenido)
+            if not contenido or len(contenido) > MAX_BYTES_XML:
+                raise RuntimeError("XML vacío o demasiado grande")
+            # La validación de estructura y antigüedad se efectúa en construir().
+            ET.fromstring(contenido)
+            print(f"AWC: descarga correcta en intento {intento}, bytes XML={len(contenido)}")
+            return contenido
+        except (OSError, ValueError, RuntimeError, ET.ParseError, EOFError) as exc:
+            ultimo_error = exc
+            print(f"AWC: intento {intento}/{len(ESPERAS_DESCARGA)} falló: {exc}", flush=True)
+    raise RuntimeError(f"No fue posible descargar un cache METAR válido: {ultimo_error}")
 
 
-def construir(xml: bytes):
+def marcador_sin_reporte(estacion):
+    """Sitúa la estación sin atribuirle METAR, visibilidad ni categoría aeronáutica."""
+    return {
+        "icao": estacion["icao"], "name": estacion.get("name") or estacion["icao"],
+        "lat": estacion["lat"], "lon": estacion["lon"],
+        "time": None, "raw": "", "visibilityM": None,
+        "ceilingFt": None, "color": "gris", "stationOnly": True,
+    }
+
+
+def catalogo_anterior():
+    """Conserva posiciones ya conocidas aunque una estación deje de informar."""
+    try:
+        historico = json.loads(DESTINO.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    catalogo = {}
+    for x in historico.get("stations", []):
+        if not isinstance(x, dict):
+            continue
+        codigo = x.get("icao")
+        lat, lon = numero(x.get("lat")), numero(x.get("lon"))
+        if (not isinstance(codigo, str) or not re.fullmatch(r"[A-Z]{4}", codigo)
+                or lat is None or lon is None or not (-85 <= lat <= -17 and -86 <= lon <= -20)):
+            continue
+        catalogo[codigo] = marcador_sin_reporte({
+            "icao": codigo, "name": x.get("name") or codigo, "lat": lat, "lon": lon,
+        })
+    return catalogo
+
+
+def construir(xml: bytes, ahora=None, catalogo=None):
+    ahora = ahora or datetime.now(timezone.utc)
     raiz = ET.fromstring(xml)
     por_codigo = {}
     for nodo in raiz.iter("METAR"):
@@ -151,13 +211,31 @@ def construir(xml: bytes):
             if previo is None or registro["time"] > previo["time"]:
                 por_codigo[registro["icao"]] = registro
     if len(por_codigo) < 30:
-        raise RuntimeError(f"Se encontraron solo {len(por_codigo)} METAR válidos; no se publican datos incompletos.")
+        raise RuntimeError(
+            f"Se encontraron solo {len(por_codigo)} METAR válidos; no se publica un cache incompleto."
+        )
+    actuales = sum(
+        0 <= (ahora - datetime.fromisoformat(r["time"].replace("Z", "+00:00"))).total_seconds()
+        <= FRESCURA_MAXIMA_SEGUNDOS for r in por_codigo.values()
+    )
+    if actuales < OBSERVACIONES_MINIMAS_RECIENTES:
+        raise RuntimeError(
+            f"AWC devolvió {actuales} METAR recientes de {len(por_codigo)}. "
+            "La fuente parece desactualizada; se conserva la publicación anterior."
+        )
+
+    estaciones = dict(catalogo if catalogo is not None else catalogo_anterior())
+    for codigo, fijo in ESTACIONES_PERMANENTES.items():
+        estaciones[codigo] = marcador_sin_reporte(fijo)
+    estaciones.update(por_codigo)  # Nunca reemplazar un METAR genuino por un marcador fijo.
+
     return {
         "source": "NOAA Aviation Weather Center - metars.cache.xml.gz",
-        "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
-        "stations": sorted(por_codigo.values(), key=lambda dato: dato["icao"]),
+        "generatedAt": ahora.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "reportingStations": len(por_codigo),
+        "recentObservations": actuales,
+        "stations": sorted(estaciones.values(), key=lambda dato: dato["icao"]),
     }
-
 
 def actualizar_provincias():
     """Publica la geometría provincial oficial; fallo no interrumpe los METAR."""
@@ -191,7 +269,10 @@ def main():
     temporal.write_text(json.dumps(documento, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     temporal.replace(DESTINO)
     actualizar_provincias()
-    print(f"Publicados {len(documento['stations'])} METAR. Generado {documento['generatedAt']}")
+    print(f"Mapa: {len(documento['stations'])} estaciones; "
+          f"{documento['reportingStations']} con METAR; "
+          f"{documento['recentObservations']} recientes. "
+          f"Generado {documento['generatedAt']}")
 
 
 if __name__ == "__main__":
