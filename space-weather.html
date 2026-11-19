@@ -283,6 +283,37 @@
       </div>
     </section>
 
+    <section class="primary-space" aria-labelledby="space-series-heading">
+      <div class="section-title">
+        <div><h2 id="space-series-heading">Entorno espacial · Variables principales</h2>
+        <p>Series observadas por NOAA/SWPC · Horarios UTC · Sin interpolar datos faltantes</p></div>
+        <a href="https://www.spaceweather.gov/communities/space-weather-enthusiasts-dashboard" target="_blank" rel="noopener noreferrer" style="font-size:12px">Tablero NOAA ↗</a>
+      </div>
+      <div class="three-charts">
+        <article class="panel series-panel" aria-labelledby="sw-speed-heading">
+          <h3 id="sw-speed-heading">Velocidad del viento solar</h3>
+          <p class="series-description">Protones del viento solar · Últimas 24 h · km/s</p>
+          <div class="series-head"><strong class="series-value" id="sw-speed-value">—</strong><span class="series-time" id="sw-speed-time">Consultando NOAA…</span></div>
+          <div class="series-chart"><svg id="sw-speed-chart" viewBox="0 0 520 220" role="img" aria-label="Evolución de velocidad del viento solar en km por segundo"><title>Viento solar</title></svg><span id="sw-speed-empty" class="chart-empty">Cargando viento solar…</span></div>
+          <div class="series-foot" id="sw-speed-source">Fuente: NOAA · RTSW, satélite activo</div>
+        </article>
+        <article class="panel series-panel" aria-labelledby="sw-mag-heading">
+          <h3 id="sw-mag-heading">Campo magnético interplanetario</h3>
+          <p class="series-description">Campo total Bt y componente Bz (GSM) · Últimas 24 h · nT</p>
+          <div class="series-head"><strong class="series-value" id="sw-mag-value">—</strong><span class="series-time" id="sw-mag-time">Consultando NOAA…</span></div>
+          <div class="series-chart"><svg id="sw-mag-chart" viewBox="0 0 520 220" role="img" aria-label="Evolución de Bt y Bz del campo magnético interplanetario en nanoteslas"><title>Campo magnético Bt y Bz</title></svg><span id="sw-mag-empty" class="chart-empty">Cargando campo magnético…</span></div>
+          <div class="series-foot"><span class="line-key">Bt (nT)</span><span class="line-key bz">Bz (nT)</span><span id="sw-mag-source">NOAA · RTSW</span></div>
+        </article>
+        <article class="panel series-panel" aria-labelledby="f107-heading">
+          <h3 id="f107-heading">Flujo solar F10.7 cm</h3>
+          <p class="series-description">Radiación a 2.800 MHz · Mediciones de los últimos 30 días · sfu</p>
+          <div class="series-head"><strong class="series-value" id="f107-main-value">—</strong><span class="series-time" id="f107-main-time">Consultando NOAA…</span></div>
+          <div class="series-chart"><svg id="f107-chart" viewBox="0 0 520 220" role="img" aria-label="Evolución del flujo solar F10.7 en unidades de flujo solar"><title>Flujo F10.7</title></svg><span id="f107-empty" class="chart-empty">Cargando flujo solar…</span></div>
+          <div class="series-foot">El flujo F10.7 se mide varias veces al día; no es una serie por minuto.</div>
+        </article>
+      </div>
+    </section>
+
     <div class="layout-two">
       <section class="panel" aria-labelledby="maximum-heading"><h3 id="maximum-heading">Máximos observados · Últimas 24 h</h3><p class="smallhint">Máximo alcanzado en cada escala, diferente del valor actual</p>
         <div class="maxrow">
@@ -297,6 +328,22 @@
         </div>
       </section>
     </div>
+
+    <section class="panel forecast-bulletin" aria-labelledby="bulletin-heading">
+      <div class="section-title"><div><h2 id="bulletin-heading">Pronóstico oficial NOAA · Tres días</h2><p>Resumen del boletín SWPC: actividad geomagnética, radiación solar y apagones de radio</p></div>
+        <a href="https://services.swpc.noaa.gov/text/3-day-forecast.txt" target="_blank" rel="noopener noreferrer" style="font-size:12px">Boletín completo ↗</a>
+      </div>
+      <div class="bulletin-date" id="forecast-issued">Consultando emisión oficial…</div>
+      <div class="bulletin-cards" id="forecast-bulletin">
+        <div class="bulletin-part">Consultando pronóstico geomagnético…</div>
+        <div class="bulletin-part">Consultando pronóstico de radiación…</div>
+        <div class="bulletin-part">Consultando pronóstico de radio…</div>
+      </div>
+      <div class="kp-prediction" id="kp-prediction" hidden>
+        <strong>Máximo Kp previsto por día (intervalos de 3 horas)</strong>
+        <div class="kp-forecast-row" id="kp-forecast-values"></div>
+      </div>
+    </section>
 
     <div class="analysis">
       <section class="panel" aria-labelledby="kp-heading">
@@ -336,6 +383,10 @@
       scales:BASE+"/products/noaa-scales.json",
       kp:BASE+"/products/noaa-planetary-k-index.json",
       flux:BASE+"/products/summary/10cm-flux.json",
+      wind:BASE+"/json/rtsw/rtsw_wind_1m.json",
+      magnetic:BASE+"/json/rtsw/rtsw_mag_1m.json",
+      fluxHistory:BASE+"/json/f107_cm_flux.json",
+      forecastText:BASE+"/text/3-day-forecast.txt",
       alerts:BASE+"/products/alerts.json"
     };
     const $=id=>document.getElementById(id);
