@@ -9,3 +9,8 @@ crons = ["4,14,24,34,44,54 * * * *"]
 
 # El secreto se registra con: npx wrangler secret put GITHUB_TOKEN
 # NO incluir el token en este archivo ni en el repositorio.
+
+# Registrar ejecuciones y fallos del cron desde Observability de Cloudflare.
+[observability]
+enabled = true
+head_sampling_rate = 1
