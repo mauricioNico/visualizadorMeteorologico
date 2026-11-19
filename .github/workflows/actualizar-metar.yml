@@ -5,6 +5,7 @@ on:
   schedule:
     - cron: "7,17,27,37,47,57 * * * *"
   workflow_dispatch:
+  workflow_call:
   push:
     branches: [main]
     paths:
@@ -35,31 +36,55 @@ jobs:
       - name: Descargar y validar cache METAR de NOAA (con reintentos)
         run: python3 scripts/actualizar_metar.py
 
-      - name: Publicar JSON con reintentos ante cambios simultáneos
+      - name: Publicar instantánea METAR sin conflictos con cambios simultáneos
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/
-          if git diff --cached --quiet; then
-            echo "Sin cambios en datos. No se necesita publicar."
-            exit 0
-          fi
-          git commit -m "data: actualizar observaciones METAR del mapa [skip ci]"
-          for intento in 1 2 3 4; do
+          cp data/metar_latest.json "$RUNNER_TEMP/metar_snapshot.json"
+
+          for intento in 1 2 3 4 5 6; do
+            # Tomar siempre la punta de main, sin intentar rebase del JSON
+            # que cambia completamente en cada corrida.
             git fetch origin main
-            if ! git rebase origin/main; then
-              git rebase --abort || true
-              echo "::error::Conflicto al integrar cambios de main."
-              exit 1
-            fi
-            if git push origin HEAD:main; then
-              echo "METAR publicados en main (intento $intento)."
+            git reset --hard FETCH_HEAD
+
+            # No sustituir jamás un informe publicado más nuevo por uno anterior.
+            if python3 - "$RUNNER_TEMP/metar_snapshot.json" data/metar_latest.json <<'PY'
+          import json,sys
+          from datetime import datetime, timezone
+          def stamp(path):
+              try:
+                  with open(path,encoding="utf-8") as file:
+                      value=json.load(file).get("generatedAt")
+                  dt=datetime.fromisoformat(value.replace("Z","+00:00"))
+                  return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+              except (OSError,ValueError,TypeError,AttributeError,KeyError):
+                  return datetime.min.replace(tzinfo=timezone.utc)
+          incoming, published=stamp(sys.argv[1]),stamp(sys.argv[2])
+          print(f"Generado nuevo: {incoming.isoformat()} | Publicado: {published.isoformat()}")
+          sys.exit(0 if published>=incoming else 1)
+          PY
+            then
+              echo "Ya se publicó una instantánea igual o más reciente. Sin cambios."
               exit 0
             fi
-            echo "::warning::Push concurrente; reintentando ($intento/4)."
-            sleep 4
+
+            cp "$RUNNER_TEMP/metar_snapshot.json" data/metar_latest.json
+            git add data/metar_latest.json
+            if git diff --cached --quiet; then
+              echo "La instantánea coincide con el remoto."
+              exit 0
+            fi
+            git commit -m "data: actualizar observaciones METAR del mapa [skip ci]"
+            if git push origin HEAD:main; then
+              echo "METAR publicados correctamente (intento $intento)."
+              exit 0
+            fi
+            echo "::warning::Hubo un push simultáneo; reintentando sobre main ($intento/6)."
+            sleep 3
           done
-          echo "::error::No se pudo publicar data/metar_latest.json después de 4 intentos."
+
+          echo "::error::Se agotaron 6 intentos de publicación."
           exit 1
