@@ -504,12 +504,186 @@
       }
       $("chart-empty").hidden=true;
     };
+    // NOAA modificó los JSON en 2026. Admitimos arrays de objetos y el
+    // formato legado con encabezados, sin convertir valores ausentes en 0.
+    const rows=data=>{
+      if(!Array.isArray(data))return data&&typeof data==="object"?[data]:[];
+      if(data.length && Array.isArray(data[0])){
+        const names=data[0];
+        return data.slice(1).map(row=>Object.fromEntries(names.map((k,i)=>[k,row[i]])));
+      }
+      return data;
+    };
+    const number=v=>v===null||v===undefined||String(v).trim()===""?null:(Number.isFinite(Number(v))?Number(v):null);
+    const nice=(v,dec=1)=>v==null?"—":v.toLocaleString("es-AR",{maximumFractionDigits:dec,minimumFractionDigits:dec});
+    const withTime=xs=>xs.sort((a,b)=>a.time-b.time);
+    const activeRows=data=>{
+      const all=rows(data).filter(x=>x&&typeof x==="object");
+      const active=all.filter(x=>x.active===true||x.active==="true");
+      if(active.length)return active;
+      // Sin datos activos: elegir una fuente, no unir satélites distintos.
+      const last=all.map(x=>({...x,_t:asUTC(x.time_tag)})).filter(x=>x._t).sort((a,b)=>b._t-a._t)[0];
+      return last&&last.source?all.filter(x=>x.source===last.source):all;
+    };
+    const chart=(id,series,unit)=>{
+      const svg=$(id);
+      svg.querySelectorAll("g[data-drawn]").forEach(x=>x.remove());
+      const NS="http://www.w3.org/2000/svg";
+      const group=document.createElementNS(NS,"g");group.dataset.drawn="1";svg.appendChild(group);
+      const el=(tag,attrs,label)=>{
+        const e=document.createElementNS(NS,tag);
+        for(const [k,v] of Object.entries(attrs||{}))e.setAttribute(k,String(v));
+        if(label!==undefined)e.textContent=String(label);
+        group.appendChild(e);return e;
+      };
+      const all=series.flatMap(s=>s.points).filter(p=>p&&p.time instanceof Date&&Number.isFinite(p.time.getTime())&&Number.isFinite(p.value));
+      if(!all.length)throw Error("Serie NOAA sin datos");
+      const timestamps=all.map(p=>p.time.getTime());
+      const xMin=Math.min(...timestamps),xMax=Math.max(...timestamps);
+      const values=all.map(p=>p.value),low=Math.min(...values),high=Math.max(...values);
+      const pad=Math.max((high-low)*.12,unit==="nT"?1:unit==="sfu"?4:12);
+      let yMin=low-pad,yMax=high+pad;
+      if(unit==="km/s")yMin=Math.max(0,yMin);
+      const x0=49,x1=505,y0=15,y1=180;
+      const X=t=>x0+(t-xMin)/(xMax-xMin||1)*(x1-x0);
+      const Y=v=>y1-(v-yMin)/(yMax-yMin||1)*(y1-y0);
+      for(let i=0;i<=4;i++){
+        const v=yMin+i*(yMax-yMin)/4,y=Y(v);
+        el("line",{x1:x0,y1:y,x2:x1,y2:y,stroke:"#dce7ef","stroke-dasharray":"3 5"});
+        el("text",{x:41,y:y+4,fill:"#607b91","font-size":12,"text-anchor":"end"},nice(v,Math.abs(yMax-yMin)<10?1:0));
+      }
+      if(yMin<0&&yMax>0)el("line",{x1:x0,y1:Y(0),x2:x1,y2:Y(0),stroke:"#8aa9bf","stroke-width":1.3});
+      for(let i=0;i<=3;i++){
+        const t=xMin+(xMax-xMin)*i/3;
+        const label=new Intl.DateTimeFormat("es-AR",{timeZone:"UTC",day:"2-digit",hour:"2-digit",hour12:false}).format(new Date(t))+"Z";
+        el("text",{x:x0+i*(x1-x0)/3,y:207,fill:"#607b91","font-size":12,"text-anchor":i===0?"start":i===3?"end":"middle"},label);
+      }
+      const span=xMax-xMin;
+      for(const s of series){
+        const ordered=withTime(s.points.slice());
+        const stride=Math.max(1,Math.ceil(ordered.length/240));
+        const pts=ordered.filter((_,i)=>i%stride===0||i===ordered.length-1);
+        let d="",previous=null;
+        for(const p of pts){
+          const t=p.time.getTime();
+          const gap=previous!==null&&t-previous>Math.max(25*60000,span/14);
+          d+=(d===""||gap?"M":"L")+X(t).toFixed(2)+" "+Y(p.value).toFixed(2)+" ";
+          previous=t;
+        }
+        if(d){
+          el("path",{d,fill:"none",stroke:s.color,"stroke-width":2.7,"stroke-linejoin":"round","stroke-linecap":"round"});
+          const last=pts[pts.length-1];
+          el("circle",{cx:X(last.time.getTime()),cy:Y(last.value),r:3.6,fill:s.color,stroke:"#ffffff","stroke-width":1.2});
+        }
+      }
+    };
+    const parseSeries=(data,keys,limits)=>{
+      const entries=activeRows(data).map(x=>({
+        time:asUTC(x.time_tag),source:String(x.source||""),
+        values:keys.map(k=>number(x[k]))
+      })).filter(x=>x.time&&x.values.some(v=>v!==null));
+      return withTime(entries.filter(x=>x.values.every((v,i)=>v!==null&&v>=limits[i][0]&&v<=limits[i][1])));
+    };
+    const recent24=points=>{
+      const last=points[points.length-1];
+      return last?points.filter(p=>last.time-p.time<=24*3600000):[];
+    };
+    const renderWind=data=>{
+      const pts=recent24(parseSeries(data,["proton_speed"],[[100,1500]]));
+      if(!pts.length)throw Error("Sin viento solar");
+      const last=pts[pts.length-1];
+      $("sw-speed-value").textContent=nice(last.values[0],0)+" km/s";
+      $("sw-speed-time").textContent=utc(last.time);
+      $("sw-speed-source").textContent="NOAA · RTSW"+(last.source?" · "+last.source:"")+" · Satélite activo";
+      chart("sw-speed-chart",[{color:"#217ca8",points:pts.map(p=>({time:p.time,value:p.values[0]}))}],"km/s");
+      $("sw-speed-empty").hidden=true;
+    };
+    const renderMagnetic=data=>{
+      const pts=recent24(parseSeries(data,["bt","bz_gsm"],[[0,250],[-250,250]]));
+      if(!pts.length)throw Error("Sin campo magnético");
+      const last=pts[pts.length-1];
+      $("sw-mag-value").textContent="Bt "+nice(last.values[0])+" · Bz "+nice(last.values[1])+" nT";
+      $("sw-mag-time").textContent=utc(last.time);
+      $("sw-mag-source").textContent=last.source?"· "+last.source:"· Satélite activo";
+      chart("sw-mag-chart",[
+        {color:"#217ca8",points:pts.map(p=>({time:p.time,value:p.values[0]}))},
+        {color:"#df8554",points:pts.map(p=>({time:p.time,value:p.values[1]}))}
+      ],"nT");
+      $("sw-mag-empty").hidden=true;
+    };
+    const fluxRows=data=>withTime(rows(data).map(x=>({
+      time:asUTC(x.time_tag||x.timestamp),value:number(x.flux),schedule:String(x.reporting_schedule||"")
+    })).filter(x=>x.time&&x.value!==null&&x.value>30&&x.value<600));
     const renderFlux=data=>{
-      const items=Array.isArray(data)?data:[];
-      const values=items.filter(x=>x && Number.isFinite(Number(x.flux))).sort((a,b)=>String(a.time_tag).localeCompare(String(b.time_tag)));
-      const item=values[values.length-1];if(!item)throw new Error("Sin dato F10.7");
-      $("f107-value").textContent=Number(item.flux).toLocaleString("es-AR")+" sfu";
-      $("f107-time").textContent="Última medición: "+utc(asUTC(item.time_tag));
+      const values=fluxRows(data),item=values[values.length-1];
+      if(!item)throw Error("Sin dato F10.7 en el resumen");
+      $("f107-value").textContent=nice(item.value,1)+" sfu";
+      $("f107-time").textContent="Dato NOAA: "+utc(item.time);
+      $("f107-main-value").textContent=nice(item.value,1)+" sfu";
+      $("f107-main-time").textContent="Último valor: "+utc(item.time);
+    };
+    const renderFluxHistory=data=>{
+      const dataPoints=fluxRows(data),last=dataPoints[dataPoints.length-1];
+      if(!last)throw Error("No hay historial de F10.7");
+      const noon=dataPoints.filter(x=>/noon|mediod/i.test(x.schedule));
+      const selected=noon.length>5?noon:dataPoints;
+      const points=selected.filter(p=>last.time-p.time<=30*86400000);
+      chart("f107-chart",[{color:"#217ca8",points:points.map(p=>({time:p.time,value:p.value}))}],"sfu");
+      $("f107-empty").hidden=true;
+      if($("f107-main-value").textContent==="—"){
+        $("f107-main-value").textContent=nice(last.value,1)+" sfu";
+        $("f107-main-time").textContent=utc(last.time);
+        $("f107-value").textContent=nice(last.value,1)+" sfu";
+        $("f107-time").textContent="Medición histórica: "+utc(last.time);
+      }
+    };
+    const renderForecastText=raw=>{
+      if(typeof raw!=="string"||!raw.includes("NOAA")||!raw.includes("Rationale:"))throw Error("Boletín NOAA vacío o inesperado");
+      const issued=raw.match(/^:Issued:\s*(.+)$/m);
+      $("forecast-issued").textContent=issued?"Boletín emitido: "+issued[1].trim():"Boletín oficial: fecha no disponible";
+      const configs=[["A","Actividad geomagnética"],["B","Radiación solar"],["C","Apagones de radio HF"]];
+      const wrap=$("forecast-bulletin");wrap.replaceChildren();
+      for(let i=0;i<configs.length;i++){
+        const [key,title]=configs[i],next=configs[i+1]?.[0];
+        const start=raw.search(new RegExp("^"+key+"\\. NOAA ","m"));
+        const end=next?raw.search(new RegExp("^"+next+"\\. NOAA ","m")):raw.length;
+        const section=start>=0?raw.slice(start,end>start?end:raw.length):"";
+        const rationale=section.match(/Rationale:\s*([\s\S]*?)$/);
+        const intro=section.split(/\n(?:NOAA Kp index breakdown|Solar Radiation Storm Forecast|Radio Blackout Forecast|Rationale:)/)[0]
+          .split("\n").slice(1).join(" ").replace(/\s+/g," ").trim();
+        const art=document.createElement("article");art.className="bulletin-part";
+        const heading=document.createElement("h4");heading.textContent=title;art.appendChild(heading);
+        const p=document.createElement("p");p.textContent=intro||"Sin detalle observado en el boletín.";art.appendChild(p);
+        if(rationale){
+          const more=document.createElement("p");
+          more.textContent="Perspectiva NOAA: "+rationale[1].replace(/\s+/g," ").trim().slice(0,380);
+          art.appendChild(more);
+        }
+        wrap.appendChild(art);
+      }
+      const kpLines=raw.split(/\r?\n/).filter(line=>/^\s*(?:00-03|03-06|06-09|09-12|12-15|15-18|18-21|21-00)UT\b/.test(line));
+      const max=[null,null,null];
+      for(const line of kpLines){
+        const nums=line.trim().split(/\s+/).slice(1,4).map(Number);
+        for(let i=0;i<3;i++)if(Number.isFinite(nums[i]))max[i]=max[i]===null?nums[i]:Math.max(max[i],nums[i]);
+      }
+      const kpBox=$("kp-forecast-values");kpBox.replaceChildren();
+      const dateParts=issued&&issued[1].match(/^(\d{4})\s+([A-Za-z]{3})\s+(\d{1,2})/);
+      const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const month=dateParts?months.indexOf(dateParts[2]): -1;
+      const firstDay=month>=0?Date.UTC(Number(dateParts[1]),month,Number(dateParts[3])):null;
+      for(let i=0;i<3;i++){
+        if(max[i]===null)continue;
+        const cell=document.createElement("div");cell.className="kp-forecast-box";
+        const date=document.createElement("small");
+        date.textContent=firstDay!==null
+          ?new Intl.DateTimeFormat("es-AR",{timeZone:"UTC",day:"2-digit",month:"short"}).format(new Date(firstDay+(i+1)*86400000))
+          :"Día "+(i+1);
+        const value=document.createElement("b");value.textContent=nice(max[i],2);
+        const key=document.createElement("small");key.textContent="Kp máximo esperado";
+        cell.append(date,value,key);kpBox.appendChild(cell);
+      }
+      $("kp-prediction").hidden=!kpBox.children.length;
     };
     const renderAlerts=data=>{
       if(!Array.isArray(data))throw new Error("Sin avisos");
