@@ -160,6 +160,23 @@
   const estadoHistorial = document.getElementById("estadoHistorial");
   let estaciones = [];
   let marcadores = new Map();
+  let cargando = false;
+
+  // Estación OACI registrada en el catálogo aeronáutico argentino.
+  // Si NOAA no dispone de un METAR, permanece en el mapa con marcador gris.
+  const estacionesPermanentes = [{
+    icao:"SADJ", name:"Mariano Moreno / VII Brigada Aérea",
+    lat:-34.560000, lon:-58.78972222,
+    time:null, raw:"", visibilityM:null, ceilingFt:null,
+    color:"gris", stationOnly:true
+  }];
+  function completarEstaciones(lista) {
+    const porCodigo=new Map(lista.map(s=>[s.icao,s]));
+    for(const fija of estacionesPermanentes){
+      if(!porCodigo.has(fija.icao))porCodigo.set(fija.icao,{...fija});
+    }
+    return [...porCodigo.values()].sort((a,b)=>a.icao.localeCompare(b.icao));
+  }
 
   function el(tag,text,clase) {
     const x = document.createElement(tag);
@@ -310,6 +327,11 @@
     const techo=Number.isFinite(s.ceilingFt)?(s.ceilingFt>=99999?"Sin techo significativo":Math.round(s.ceilingFt)+" pies"):"Sin dato";
     datos.append(tarjetaDato("Techo de nubes",techo));
     detalle.append(datos);
+    if(s.stationOnly || !s.raw){
+      detalle.append(el("p","Estación registrada, sin METAR disponible en la última publicación NOAA. Se identifica en gris; consultá el historial para comprobar reportes previos."));
+    }else if(colorSeguro(s)==="gris"){
+      detalle.append(el("p","Atención: el último METAR almacenado está vencido o no tiene datos suficientes; no representa condiciones meteorológicas actuales."));
+    }
     detalle.append(el("p","Texto original del METAR","subtitulo-metar"));
     detalle.append(el("pre",s.raw||"No se dispone del texto METAR."));
     mostrarHistorialIntegrado(s.icao);
@@ -338,7 +360,7 @@
         radius:5,weight:1,color:color==="blanco"?"#333":"#152a3d",
         fillColor:colorHex[color],fillOpacity:1
       }).addTo(capaEstaciones);
-      m.bindTooltip(s.icao+" · "+(s.name||""),{direction:"top"});
+      m.bindTooltip(s.icao+" · "+(s.name||"")+(s.stationOnly?" · Sin METAR publicado":""),{direction:"top"});
       m.on("click",function(){seleccionar(s,false);});
       marcadores.set(s.icao,m);
       const option=document.createElement("option");option.value=s.icao;
@@ -348,6 +370,8 @@
     return recientes;
   }
   async function cargar() {
+    if(cargando)return;
+    cargando=true;
     enviarEstado("Cargando última instantánea METAR…",false);
     try {
       // Las publicaciones hechas por Actions con GITHUB_TOKEN no fuerzan el
@@ -363,17 +387,24 @@
       const json=await response.json();
       if(!Array.isArray(json.stations)||json.stations.length===0)
         throw Error("Todavía no hay observaciones publicadas. Debe ejecutarse la actualización de datos.");
-      estaciones=json.stations;
+      estaciones=completarEstaciones(json.stations);
       const actuales=repintar();
       const seleccionada=estaciones.find(x=>x.icao===input.value.trim().toUpperCase());
       if(seleccionada)dibujarDetalle(seleccionada);
       const publicado=json.generatedAt?formatoUTC(new Date(json.generatedAt),true):"sin fecha";
       const demora=json.generatedAt ? Math.round((Date.now()-Date.parse(json.generatedAt))/60000) : Infinity;
       const aviso=demora>90?" · Actualización demorada":"";
-      enviarEstado("METAR disponibles: "+estaciones.length+" estaciones · "+
-        actuales+" observaciones de las últimas 3 horas · Archivo actualizado: "+publicado+aviso,demora>90);
+      const conReporte=estaciones.filter(x=>Boolean(x.raw&&x.time)).length;
+      enviarEstado("Estaciones en el mapa: "+estaciones.length+
+        " · "+conReporte+" con METAR publicado · "+actuales+
+        " observaciones de las últimas 3 horas · Archivo actualizado: "+
+        publicado+aviso,demora>90);
     }catch(err){
-      enviarEstado("No fue posible cargar METAR actuales: "+err.message+". El mapa de fondo sigue disponible y el formulario OACI del visualizador anterior permanece operativo.",true);
+      // Si falla la red por completo, no perder las estaciones fijas ni los marcadores existentes.
+      if(!estaciones.length){estaciones=completarEstaciones([]);repintar();}
+      enviarEstado("No fue posible cargar METAR actuales: "+err.message+". Se mantienen las estaciones conocidas y el historial Ogimet.",true);
+    }finally{
+      cargando=false;
     }
   }
   function buscar() {
@@ -413,6 +444,9 @@
     .then(g=>L.geoJSON(g,{style:{color:"#a92026",weight:1,opacity:.8,fill:false},interactive:false}).addTo(mapa))
     .catch(()=>{ /* IGN permanece disponible como mapa base alternativo */ });
   fechaUTC(); encuadrar("sur"); cargar();
+  // Actualizar también la página abierta, sin exigir pulsar el botón.
+  setInterval(()=>{if(!document.hidden)cargar();},10*60*1000);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)cargar();});
 })();
 </script>
 </body>
