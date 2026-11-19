@@ -4,6 +4,7 @@
  * No almacena ni expone el token; debe configurarse como secreto GITHUB_TOKEN
  * en Cloudflare. Un visitante no puede iniciar el workflow por HTTP.
  */
+const WORKER_VERSION = "metar-scheduler-2026-11-19-v2";
 const ENDPOINT =
   "https://api.github.com/repos/mauricioNico/visualizadorMeteorologico/actions/workflows/actualizar-metar.yml/dispatches";
 const METAR_JSON =
@@ -11,6 +12,7 @@ const METAR_JSON =
 
 async function dispatchWorkflow(env) {
   if (!env.GITHUB_TOKEN) {
+    console.error("[metar-cron] No se encuentra el secreto GITHUB_TOKEN en el entorno del Worker");
     throw new Error("Falta el secreto GITHUB_TOKEN en Cloudflare Workers");
   }
 
@@ -31,10 +33,11 @@ async function dispatchWorkflow(env) {
       });
       // GitHub workflow_dispatch responde 204 No Content cuando acepta el disparo.
       if (response.status === 204) {
-        console.log("Disparo de workflow aceptado por GitHub");
+        console.log("[metar-cron] GitHub aceptó workflow_dispatch (HTTP 204).");
         return;
       }
       const message = (await response.text()).slice(0, 250);
+      console.error("[metar-cron] Respuesta GitHub HTTP", response.status, message);
       // No insistir con errores permanentes: credencial sin permisos, no encontrada.
       if ([400, 401, 403, 404, 422].includes(response.status)) {
         throw new Error("Error permanente GitHub HTTP " + response.status + ": " + message);
@@ -65,6 +68,7 @@ async function health() {
       source: "GitHub raw / NOAA AWC",
       generatedAt: obj.generatedAt ?? null,
       stationCount: Array.isArray(obj.stations) ? obj.stations.length : null,
+      workerVersion: WORKER_VERSION,
       ageMinutes,
       status: ageMinutes === null ? "unknown" : ageMinutes > 90 ? "delayed" : "current",
       note: "Este endpoint es informativo. El disparador se ejecuta únicamente desde el cron de Cloudflare."
@@ -82,14 +86,25 @@ async function health() {
 
 export default {
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(dispatchWorkflow(env));
+    // Estos mensajes se pueden consultar en Cloudflare → Observability → Logs.
+    // No incluir jamás el valor de GITHUB_TOKEN en los registros.
+    console.log("[metar-cron] Inicio", WORKER_VERSION, "cron:", controller.cron,
+      "UTC:", new Date(controller.scheduledTime || Date.now()).toISOString());
+    ctx.waitUntil(
+      dispatchWorkflow(env)
+        .then(() => console.log("[metar-cron] Solicitud aceptada. El workflow continúa en GitHub Actions."))
+        .catch(error => {
+          console.error("[metar-cron] FALLO al iniciar la actualización:", String(error.message || error));
+          throw error;
+        })
+    );
   },
   async fetch(request) {
     // Endpoint de sólo lectura, no expone el token ni permite disparar workflows.
     if (new URL(request.url).pathname === "/health" && request.method === "GET") {
       return health();
     }
-    return new Response("METAR scheduler · GET /health", {
+    return new Response("METAR scheduler " + WORKER_VERSION + " · GET /health", {
       status: 200,
       headers: { "Content-Type": "text/plain; charset=utf-8" }
     });
