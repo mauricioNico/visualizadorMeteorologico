@@ -227,6 +227,11 @@ def construir(xml: bytes, ahora=None, catalogo=None):
     estaciones = dict(catalogo if catalogo is not None else catalogo_anterior())
     for codigo, fijo in ESTACIONES_PERMANENTES.items():
         estaciones[codigo] = marcador_sin_reporte(fijo)
+    # Usar el nombre aeronáutico oficial en la etiqueta de estaciones conocidas.
+    # El informe real (hora, raw, color y variables) continúa intacto.
+    for codigo, fijo in ESTACIONES_PERMANENTES.items():
+        if codigo in por_codigo:
+            por_codigo[codigo]["name"] = fijo["name"]
     estaciones.update(por_codigo)  # Nunca reemplazar un METAR genuino por un marcador fijo.
 
     return {
