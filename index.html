@@ -138,19 +138,53 @@
 
       <a class="tool-card" href="space-weather.html" aria-label="Abrir visualizador de meteorología espacial">
         <div class="illustration space" aria-hidden="true">
-          <svg viewBox="0 0 380 145" preserveAspectRatio="xMidYMid slice">
-            <defs><radialGradient id="sun" cx=".4" cy=".4" r=".65"><stop offset="0" stop-color="#fff3c4"/><stop offset=".45" stop-color="#fbc377"/><stop offset="1" stop-color="#f28a50"/></radialGradient></defs>
-            <circle cx="234" cy="74" r="55" stroke="#d8eefa" stroke-width="1" fill="none" opacity=".22"/>
-            <circle cx="234" cy="74" r="73" stroke="#d8eefa" stroke-width="1" fill="none" opacity=".16"/>
-            <circle cx="234" cy="74" r="91" stroke="#d8eefa" stroke-width="1" fill="none" opacity=".1"/>
-            <circle cx="234" cy="74" r="40" fill="url(#sun)"/>
-            <path d="M210 52 Q235 42 257 58 M211 91 Q236 104 257 87" fill="none" stroke="#e68255" opacity=".5" stroke-width="5" stroke-linecap="round"/>
-            <rect x="23" y="24" width="118" height="101" rx="11" fill="#ffffff" fill-opacity=".11" stroke="#d0eaff" stroke-opacity=".25"/>
-            <text x="42" y="49" fill="#d4eefa" font-size="12" font-family="Segoe UI,Arial,sans-serif" font-weight="800">ESCALAS NOAA</text>
-            <g font-size="17" font-family="Segoe UI,Arial,sans-serif" font-weight="800">
-              <text x="43" y="76" fill="#e5f5ff">R</text><text x="74" y="76" fill="#b9d6eb">Radio</text>
-              <text x="43" y="98" fill="#e5f5ff">S</text><text x="74" y="98" fill="#b9d6eb">Solar</text>
-              <text x="43" y="120" fill="#e5f5ff">G</text><text x="74" y="120" fill="#b9d6eb">Geomag.</text>
+          <svg viewBox="0 0 380 145" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="solar-disk" cx="38%" cy="30%" r="72%">
+                <stop offset="0%" stop-color="#fff7bc"/>
+                <stop offset="48%" stop-color="#ffd16d"/>
+                <stop offset="100%" stop-color="#f38a32"/>
+              </radialGradient>
+              <radialGradient id="solar-glow">
+                <stop offset="0%" stop-color="#ffcd65" stop-opacity=".40"/>
+                <stop offset="100%" stop-color="#ffcd65" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+
+            <!-- Tarjeta de escalas: texto íntegramente dentro del rectángulo. -->
+            <rect x="18" y="18" width="156" height="109" rx="12"
+                  fill="#ffffff" fill-opacity=".12" stroke="#cde9fb" stroke-opacity=".32"/>
+            <text x="32" y="42" fill="#e4f4ff" font-size="12" font-family="Segoe UI,Arial,sans-serif" font-weight="800">ESCALAS NOAA</text>
+            <g font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="750">
+              <text x="33" y="66" fill="#ffffff">R</text>
+              <text x="61" y="66" fill="#c7e5f8">Radio</text>
+              <text x="33" y="91" fill="#ffffff">S</text>
+              <text x="61" y="91" fill="#c7e5f8">Solar</text>
+              <text x="33" y="116" fill="#ffffff">G</text>
+              <text x="61" y="116" fill="#c7e5f8">Geomagnética</text>
+            </g>
+
+            <!-- Sol con disco y rayos bien definidos; sin confundirlo con un planeta. -->
+            <g transform="translate(275 72)">
+              <circle r="69" fill="url(#solar-glow)"/>
+              <circle r="66" fill="none" stroke="#fbc77e" stroke-opacity=".20"/>
+              <g stroke="#ffcc69" stroke-width="6" stroke-linecap="round">
+                <line x1="0" y1="-46" x2="0" y2="-57"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(30)"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(60)"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(90)"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(120)"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(150)"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(180)"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(210)"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(240)"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(270)"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(300)"/>
+                <line x1="0" y1="-46" x2="0" y2="-57" transform="rotate(330)"/>
+              </g>
+              <circle r="36" fill="url(#solar-disk)" stroke="#ffe6a1" stroke-width="2"/>
+              <path d="M-18 -11 Q-5 -21 9 -12 M-6 16 Q11 21 23 8"
+                    fill="none" stroke="#e97829" stroke-width="3" stroke-linecap="round" opacity=".30"/>
             </g>
           </svg>
         </div>
