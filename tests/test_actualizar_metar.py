@@ -50,6 +50,7 @@ class CacheMetarTests(unittest.TestCase):
         resultado = metar.construir(self.xml(incluir_sadj=True), ahora=self.AHORA, catalogo={})
         sadj = next(x for x in resultado["stations"] if x["icao"] == "SADJ")
         self.assertEqual(sadj["raw"].split()[0:2], ["METAR", "SADJ"])
+        self.assertEqual(sadj["name"], "Mariano Moreno / VII Brigada Aérea")
         self.assertNotIn("stationOnly", sadj)
         self.assertEqual(resultado["reportingStations"], 36)
 
