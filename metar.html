@@ -174,6 +174,7 @@
     const porCodigo=new Map(lista.map(s=>[s.icao,s]));
     for(const fija of estacionesPermanentes){
       if(!porCodigo.has(fija.icao))porCodigo.set(fija.icao,{...fija});
+      else if(!porCodigo.get(fija.icao).name || porCodigo.get(fija.icao).name===fija.icao)porCodigo.get(fija.icao).name=fija.name;
     }
     return [...porCodigo.values()].sort((a,b)=>a.icao.localeCompare(b.icao));
   }
@@ -357,7 +358,7 @@
       const color=colorSeguro(s);
       if(color!=="gris")recientes++;
       const m=L.circleMarker([s.lat,s.lon],{
-        radius:5,weight:1,color:color==="blanco"?"#333":"#152a3d",
+        radius:s.icao==="SADJ"?7:5,weight:s.icao==="SADJ"?2:1,color:s.icao==="SADJ"?"#174979":color==="blanco"?"#333":"#152a3d",
         fillColor:colorHex[color],fillOpacity:1
       }).addTo(capaEstaciones);
       m.bindTooltip(s.icao+" · "+(s.name||"")+(s.stationOnly?" · Sin METAR publicado":""),{direction:"top"});
