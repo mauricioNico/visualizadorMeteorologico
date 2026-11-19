@@ -621,6 +621,28 @@
         font-size: 3.2rem;
       }
     }
+  
+    header .back-home {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      border: 1px solid #95b1d0;
+      border-radius: 9px;
+      padding: 10px 13px;
+      font-weight: 700;
+      font-size: 14px;
+      white-space: nowrap;
+      text-decoration: none;
+      margin-left: auto;
+    }
+    header .back-home:hover { background: rgba(255,255,255,0.12); }
+    header .back-home:focus-visible { outline: 3px solid #74b5f6; outline-offset: 3px; }
+    @media (max-width: 600px) {
+      header .wrap { flex-wrap: wrap; }
+      header .back-home { margin-left: 0; }
+    }
+
   </style>
 </head>
 
@@ -631,6 +653,8 @@
       <h1>Visualizador SYNOP</h1>
       <p>Carga y análisis de observaciones SYNOP</p>
     </div>
+
+    <a href="index.html" class="back-home">← Panel principal</a>
 
     <img
       class="header-logo"
