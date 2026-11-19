@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#091728">
+  <meta name="description" content="Panel de meteorología espacial: escalas NOAA R/S/G, pronóstico, índice Kp y avisos del Space Weather Prediction Center.">
+  <title>Meteorología espacial · Visualizador Meteorológico</title>
+  <link rel="icon" href="logoM.png" type="image/png">
+  <style>
+    :root{color-scheme:dark;--bg:#071321;--bg2:#0b1d30;--card:#102438;--card2:#112b41;--line:#284158;--text:#edf6ff;--muted:#9fb5c8;--aqua:#65e4d0;--blue:#67baf9;--yellow:#ffd07b;--red:#fd8488}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse 75% 28% at 83% -5%,#174c62 0%,transparent 70%),linear-gradient(180deg,#0b2032,#071321 42%,#091927);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+    a{color:#9ad9ff}a:focus-visible,button:focus-visible{outline:3px solid #76d8fa;outline-offset:4px}
+    .shell{max-width:1220px;margin:auto;padding:0 24px}
+    .topbar{border-bottom:1px solid #ffffff20;background:#071625ac;backdrop-filter:blur(12px)}
+    .topbar-inner{display:flex;justify-content:space-between;align-items:center;gap:20px;min-height:75px}
+    .brand{display:flex;gap:12px;align-items:center;color:#fff;text-decoration:none;font-weight:800;letter-spacing:.01em}.brand-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,#205c78,#153146);border:1px solid #5999b377}
+    .brand small{display:block;color:#96b7ca;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+    nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}nav a{text-decoration:none;color:#b5cee1;font-size:13px;font-weight:700;padding:9px 13px;border-radius:10px;border:1px solid transparent}nav a:hover,nav a[aria-current=page]{background:#19374d;border-color:#47738b;color:#e5f9ff}
+    .hero{position:relative;overflow:hidden;padding:46px 0 33px;border-bottom:1px solid #ffffff10}.hero-content{position:relative;z-index:1}.eyebrow{text-transform:uppercase;letter-spacing:.19em;font-size:11px;color:#79d7d1;font-weight:900;display:flex;align-items:center;gap:9px}
+    h1{font-weight:820;font-size:clamp(32px,4.4vw,56px);letter-spacing:-.055em;line-height:1.07;margin:13px 0 12px;max-width:650px}h1 span{color:#7fe8d4}
+    .hero p{max-width:650px;color:#b0c6d6;font-size:16px;margin:0}.orb{position:absolute;right:max(5%,calc((100vw - 1200px)/2));top:-90px;width:370px;height:370px;border-radius:50%;background:radial-gradient(circle at 38% 38%,#ffea9b 0%,#fbb75f 14%,#de7037 26%,#823827 42%,#6a31283d 53%,transparent 68%);filter:drop-shadow(0 0 45px #fcac4b28);opacity:.65;pointer-events:none}
+    .orb:after{content:"";position:absolute;inset:-36px;border:1px solid #f6bc7530;border-radius:50%;box-shadow:0 0 0 42px #f0af5810,0 0 0 90px #ea9a3a08}
+    .hero-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:24px}
+    .live-pill{display:inline-flex;align-items:center;gap:9px;padding:10px 13px;border:1px solid #437681;border-radius:10px;background:#183b4677;font-weight:750;font-size:12px;color:#c4f5ec}
+    .dot{width:8px;height:8px;border-radius:50%;background:var(--aqua);box-shadow:0 0 0 4px #65e4d01f;flex:0 0 8px}.dot.error{background:#ffae8f;box-shadow:0 0 0 4px #ffae8f21}
+    button{font:inherit;cursor:pointer;background:#d0f2fc;border:1px solid #d0f2fc;color:#092435;border-radius:10px;padding:10px 16px;font-weight:850;font-size:12px}button:hover{background:white}button:disabled{opacity:.55;cursor:wait}
+    .updated{font-size:12px;color:#91aec2}
+    main{padding:32px 0 48px}
+    .section-title{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 0 17px}.section-title h2{margin:0;font-size:20px;letter-spacing:-.025em}.section-title p{margin:3px 0 0;color:var(--muted);font-size:12px}
+    .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
+    .scale-card,.panel{border:1px solid #315068;border-radius:17px;background:linear-gradient(150deg,#163349,#102336 80%);box-shadow:0 14px 32px #0002}
+    .scale-card{padding:22px;min-height:256px;position:relative;overflow:hidden}
+    .scale-card:before{content:"";height:3px;position:absolute;top:0;left:0;right:0;background:var(--aqua)}.scale-card[data-level="1"]:before,.scale-card[data-level="2"]:before{background:#ffd27b}.scale-card[data-level="3"]:before,.scale-card[data-level="4"]:before,.scale-card[data-level="5"]:before{background:#ff8687}
+    .card-heading{display:flex;align-items:center;gap:12px}.letter{display:grid;place-items:center;width:44px;height:44px;border-radius:11px;background:#d4f7f013;color:#9cf1df;border:1px solid #6bcdbc77;font-size:23px;font-weight:950}.scale-card[data-level="1"] .letter,.scale-card[data-level="2"] .letter{color:var(--yellow);border-color:#be985e80;background:#b988241a}.scale-card[data-level="3"] .letter,.scale-card[data-level="4"] .letter,.scale-card[data-level="5"] .letter{color:var(--red);border-color:#c6686980;background:#b849491b}
+    .card-heading strong{display:block;font-size:14px}.card-heading small{display:block;font-size:11px;color:#91abc0}
+    .scale-big{display:flex;align-items:baseline;gap:13px;margin:21px 0 1px}.scale-big b{font-size:40px;letter-spacing:-.055em;font-weight:850;line-height:1}.scale-big span{font-size:13px;color:#c1d7e6;font-weight:650}
+    .scale-card .note{color:#acc0d0;font-size:12px;line-height:1.55;min-height:36px;margin:10px 0 19px}
+    .blocks{display:flex;gap:5px}.blocks i{display:block;height:7px;flex:1;background:#325064;border-radius:2px}.blocks i.on{background:#67e1cc}.scale-card[data-level="1"] .blocks i.on,.scale-card[data-level="2"] .blocks i.on{background:#ffcd6c}.scale-card[data-level="3"] .blocks i.on,.scale-card[data-level="4"] .blocks i.on,.scale-card[data-level="5"] .blocks i.on{background:#f78386}
+    .scale-foot{display:flex;justify-content:space-between;margin-top:9px;color:#85a5b7;font-size:10px}
+    .status-banner{display:none;border:1px solid #c0776c;background:#472a2d;border-radius:11px;padding:12px 15px;margin-bottom:21px;color:#ffd4cd;font-size:13px}.status-banner.show{display:block}
+    .layout-two{display:grid;grid-template-columns:1.16fr .84fr;gap:16px;margin-top:24px}
+    .panel{padding:21px;min-width:0}.panel h3{font-size:16px;margin:0 0 15px;letter-spacing:-.018em}.panel .smallhint{font-size:11px;color:#91afc2;margin:-9px 0 18px}
+    .maxrow{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}.maxbox{background:#0b2133;border:1px solid #2e495e;border-radius:12px;padding:16px}.maxbox .key{color:#89cbd4;font-size:12px;font-weight:800}.maxbox b{display:block;font-size:29px;margin:4px 0 0;line-height:1.1}.maxbox small{font-size:11px;color:#9ab5c8}
+    .forecast-list{display:grid;gap:9px}.forecast-day{display:grid;grid-template-columns:120px 1fr;gap:12px;background:#0b2133;border:1px solid #2f495e;border-radius:12px;padding:12px 14px}.day{color:#d3ecf7;font-size:13px;font-weight:800}.date-small{display:block;color:#8eaabd;font-size:10px;margin-top:3px;font-weight:600}.probs{display:flex;gap:15px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.prob{font-size:12px;text-align:center}.prob b{display:block;font-size:14px;color:white}.prob span{color:#83a7bd;font-size:10px}.prob.glevel{border-left:1px solid #31516a;padding-left:13px}.prob.glevel b{color:#8ee7ce}
+    .analysis{margin-top:24px;display:grid;grid-template-columns:1.33fr .67fr;gap:16px}
+    .metric-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:11px;margin-top:16px}.metric{background:#0a2134;border:1px solid #2b465b;border-radius:12px;padding:14px}.metric .name{color:#9cb8c9;font-size:11px}.metric b{display:block;font-size:30px;letter-spacing:-.04em;margin:3px 0}.metric small{color:#85a9bd;font-size:10px}
+    .chart-wrap{height:240px;position:relative}.chart-wrap svg{width:100%;height:100%;display:block;overflow:visible}.chart-empty{color:#9db4c6;position:absolute;left:0;right:0;top:45%;text-align:center;font-size:13px}
+    .legend{display:flex;gap:18px;flex-wrap:wrap;color:#9db5c5;font-size:11px;margin-top:7px}.legend span:before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:2px;background:#62d6c6}.legend span:last-child:before{background:#ffb96a}
+    .alerts{display:grid;gap:11px}.alert{padding:13px 14px;background:#0a2134;border:1px solid #314b61;border-radius:11px}.alert .alert-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.alert strong{font-size:12px;color:#e7f4ff}.alert time{color:#8ca9bb;font-size:10px}.alert p{font-size:12px;color:#b7cedd;margin:7px 0 0;line-height:1.45}
+    .tag{display:inline-block;font-size:10px;font-weight:850;border-radius:5px;padding:3px 6px;background:#6c563331;color:#ffce89}.tag.alert-level{background:#a2474933;color:#ffb6b6}
+    .impact-panel{margin-top:24px;background:linear-gradient(110deg,#173446,#102638);border:1px solid #315268;border-radius:17px;padding:20px 24px}
+    .impact-panel h3{margin:0 0 12px;font-size:15px}.impacts{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.impacts strong{display:block;font-size:12px;color:#b4f1e5;margin-bottom:6px}.impacts p{margin:0;font-size:12px;color:#abc1d1;line-height:1.6}
+    .info-note{margin:22px 0 0;color:#88a2b5;font-size:11px;line-height:1.7}.info-note a{color:#afdffd}
+    footer{border-top:1px solid #254158;color:#8faabb;padding:20px 0 32px;font-size:12px}.foot-inner{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    @media(max-width:900px){.cards{grid-template-columns:repeat(3,minmax(0,1fr))}.scale-card{padding:16px;min-height:270px}.analysis,.layout-two{grid-template-columns:1fr}.orb{right:-125px;opacity:.38}}
+    @media(max-width:650px){.shell{padding:0 15px}.topbar-inner{align-items:flex-start;flex-direction:column;padding:14px 0;gap:10px}nav{gap:3px}nav a{font-size:11px;padding:7px 9px}.hero{padding:38px 0 25px}h1{font-size:35px}.hero p{font-size:14px}.cards{grid-template-columns:1fr}.scale-card{min-height:0}.scale-card .note{min-height:0}.layout-two{margin-top:15px}.forecast-day{grid-template-columns:1fr;gap:7px}.probs{justify-content:space-between;gap:9px}.prob.glevel{padding-left:8px}.impacts{grid-template-columns:1fr;gap:14px}.metric-strip{grid-template-columns:1fr 1fr}.maxbox{padding:10px}.maxbox b{font-size:21px}.maxbox small{font-size:9px}.panel{padding:15px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="index.html" aria-label="Volver al Visualizador Meteorológico">
+        <span class="brand-icon" aria-hidden="true">✦</span><span>VISUALIZADOR METEOROLÓGICO<small>Paneles y observaciones</small></span>
+      </a>
+      <nav aria-label="Navegación de visualizadores">
+        <a href="index.html">METAR</a><a href="synop.html">SYNOP</a><a href="space-weather.html" aria-current="page">SPACE WEATHER</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="orb" aria-hidden="true"></div>
+    <div class="shell hero-content">
+      <div class="eyebrow"><span class="dot"></span> NOAA · SPACE WEATHER PREDICTION CENTER</div>
+      <h1>Meteorología <span>espacial.</span></h1>
+      <p>Estado de la actividad solar y geomagnética, observado y pronosticado. Indicadores relevantes para comunicaciones HF, navegación GNSS y operaciones aéreas.</p>
+      <div class="hero-actions">
+        <div class="live-pill"><span id="live-dot" class="dot"></span><span id="status">Consultando NOAA…</span></div>
+        <button id="refresh" type="button">↻ Actualizar datos</button>
+        <span class="updated" id="updated" aria-live="polite">Todas las horas en UTC</span>
+      </div>
+    </div>
+  </section>
+
+  <main class="shell">
+    <div id="error-banner" class="status-banner" role="status"></div>
+    <section aria-labelledby="current-heading">
+      <div class="section-title"><div><h2 id="current-heading">Condiciones actuales</h2><p>Último nivel observado · Escalas oficiales de NOAA (0–5)</p></div><a href="https://www.spaceweather.gov/noaa-scales-explanation" target="_blank" rel="noopener noreferrer" style="font-size:12px">Interpretar las escalas ↗</a></div>
+      <div class="cards">
+        <article class="scale-card" id="card-R" data-level="0">
+          <div class="card-heading"><span class="letter">R</span><div><strong>Apagones de radio</strong><small>Radio Blackouts · HF</small></div></div>
+          <div class="scale-big"><b id="current-R">—</b><span id="severity-R">Cargando…</span></div>
+          <p class="note" id="effect-R">Alteraciones de las comunicaciones HF en el hemisferio iluminado.</p>
+          <div class="blocks" id="bars-R" aria-label="Nivel R de 0 a 5"></div><div class="scale-foot"><span>R1 · Menor</span><span>R5 · Extrema</span></div>
+        </article>
+        <article class="scale-card" id="card-S" data-level="0">
+          <div class="card-heading"><span class="letter">S</span><div><strong>Radiación solar</strong><small>Solar Radiation Storms</small></div></div>
+          <div class="scale-big"><b id="current-S">—</b><span id="severity-S">Cargando…</span></div>
+          <p class="note" id="effect-S">Protones energéticos; posible repercusión en satélites y rutas polares.</p>
+          <div class="blocks" id="bars-S" aria-label="Nivel S de 0 a 5"></div><div class="scale-foot"><span>S1 · Menor</span><span>S5 · Extrema</span></div>
+        </article>
+        <article class="scale-card" id="card-G" data-level="0">
+          <div class="card-heading"><span class="letter">G</span><div><strong>Actividad geomagnética</strong><small>Geomagnetic Storms</small></div></div>
+          <div class="scale-big"><b id="current-G">—</b><span id="severity-G">Cargando…</span></div>
+          <p class="note" id="effect-G">Perturbaciones del campo geomagnético y posibles efectos sobre GNSS.</p>
+          <div class="blocks" id="bars-G" aria-label="Nivel G de 0 a 5"></div><div class="scale-foot"><span>G1 · Menor</span><span>G5 · Extrema</span></div>
+        </article>
+      </div>
+    </section>
+
+    <div class="layout-two">
+      <section class="panel" aria-labelledby="maximum-heading"><h3 id="maximum-heading">Máximos observados · Últimas 24 h</h3><p class="smallhint">Máximo alcanzado en cada escala, diferente del valor actual</p>
+        <div class="maxrow">
+          <div class="maxbox"><span class="key">RADIO · R</span><b id="max-R">—</b><small id="maxlabel-R">Sin datos</small></div>
+          <div class="maxbox"><span class="key">RADIACIÓN · S</span><b id="max-S">—</b><small id="maxlabel-S">Sin datos</small></div>
+          <div class="maxbox"><span class="key">GEOMAG. · G</span><b id="max-G">—</b><small id="maxlabel-G">Sin datos</small></div>
+        </div>
+      </section>
+      <section class="panel" aria-labelledby="forecast-heading"><h3 id="forecast-heading">Pronóstico NOAA · Próximos 3 días</h3><p class="smallhint">Probabilidades de eventos R y S; nivel G previsto</p>
+        <div class="forecast-list" id="forecast">
+          <div class="forecast-day">Consultando pronóstico…</div>
+        </div>
+      </section>
+    </div>
+
+    <div class="analysis">
+      <section class="panel" aria-labelledby="kp-heading">
+        <div class="section-title" style="margin-bottom:7px"><div><h2 id="kp-heading" style="font-size:16px">Índice planetario Kp</h2><p>Observaciones de las últimas 48 horas · Valores de 0 a 9</p></div><span id="kp-last" style="font-size:12px;color:#9bded9">—</span></div>
+        <div class="chart-wrap"><svg id="kp-chart" viewBox="0 0 660 230" role="img" aria-label="Serie observada del índice planetario Kp durante las últimas 48 horas"><title>Índice Kp observado</title></svg><div id="chart-empty" class="chart-empty">Consultando valores Kp…</div></div>
+        <div class="legend"><span>Índice Kp observado</span><span>Umbral de tormenta G1: Kp ≥ 5</span></div>
+        <div class="metric-strip">
+          <div class="metric"><div class="name">Kp observado más reciente</div><b id="kp-value">—</b><small id="kp-time">Sin observación</small></div>
+          <div class="metric"><div class="name">Flujo solar F10.7 cm</div><b id="f107-value">—</b><small id="f107-time">sfu · valor publicado por NOAA</small></div>
+        </div>
+      </section>
+      <section class="panel" aria-labelledby="alerts-heading">
+        <div class="section-title" style="margin-bottom:7px"><div><h2 id="alerts-heading" style="font-size:16px">Mensajes recientes del SWPC</h2><p>Últimas publicaciones, no necesariamente vigentes</p></div></div>
+        <div class="alerts" id="alerts"><p style="color:#97b4c7;font-size:13px">Consultando avisos…</p></div>
+        <p class="info-note"><a href="https://www.spaceweather.gov/alerts-watches-and-warnings" target="_blank" rel="noopener noreferrer">Ver avisos y advertencias oficiales ↗</a></p>
+      </section>
+    </div>
+
+    <section class="impact-panel" aria-labelledby="impact-heading">
+      <h3 id="impact-heading">¿Por qué importa en meteorología aeronáutica?</h3>
+      <div class="impacts">
+        <div><strong>Comunicaciones HF · Escala R</strong><p>Los eventos solares pueden degradar o interrumpir enlaces HF, especialmente en el hemisferio diurno.</p></div>
+        <div><strong>Radiación · Escala S</strong><p>Los episodios de protones energéticos pueden aumentar la exposición en rutas de gran altitud y latitudes polares.</p></div>
+        <div><strong>Navegación GNSS · Escala G</strong><p>Las perturbaciones ionosféricas asociadas a tormentas geomagnéticas pueden afectar la precisión y continuidad GNSS.</p></div>
+      </div>
+    </section>
+    <p class="info-note">Fuente: <a href="https://www.spaceweather.gov/" target="_blank" rel="noopener noreferrer">NOAA / NWS Space Weather Prediction Center</a>. Información orientativa para seguimiento. Las escalas se refieren a condiciones y pronósticos globales; no sustituyen avisos operacionales ni productos aeronáuticos oficiales. Los datos y su frecuencia de actualización dependen de NOAA. Los horarios se expresan en UTC.</p>
+  </main>
+
+  <footer><div class="shell foot-inner"><span>Visualizador Meteorológico · Desarrollado por Mauricio Nicolás Laurizi</span><span>Datos públicos NOAA/SWPC · Prototipo 1.0</span></div></footer>
+
+  <script>
+  "use strict";
+  (function(){
+    const BASE="https://services.swpc.noaa.gov";
+    const URLS={
+      scales:BASE+"/products/noaa-scales.json",
+      kp:BASE+"/products/noaa-planetary-k-index.json",
+      flux:BASE+"/products/summary/10cm-flux.json",
+      alerts:BASE+"/products/alerts.json"
+    };
+    const $=id=>document.getElementById(id);
+    const meanings=["Sin actividad significativa","Menor","Moderada","Fuerte","Severa","Extrema"];
+    const descriptions={
+      R:["Sin apagón de radio significativo observado.","Pueden darse degradaciones menores de comunicaciones HF.","Posibles pérdidas temporales de enlaces HF en el lado diurno.","Interrupciones HF importantes en áreas iluminadas.","Degradación HF severa en gran parte del hemisferio diurno.","Interrupciones HF extremas del lado diurno."],
+      S:["Sin tormenta de radiación solar significativa observada.","Posible incremento menor del riesgo de radiación.","Mayores precauciones para vuelos de gran altitud y rutas polares.","Impactos significativos en ambientes de radiación elevada.","Condiciones radiológicas severas en regiones expuestas.","Condiciones extremas de radiación solar."],
+      G:["Sin tormenta geomagnética significativa observada.","Perturbaciones menores; posibles efectos leves en GNSS.","Posibles degradaciones de precisión GNSS.","Perturbaciones geomagnéticas fuertes.","Efectos geomagnéticos severos.","Perturbación geomagnética extrema."]
+    };
+    const utc = d => {
+      if(!(d instanceof Date) || !Number.isFinite(d.getTime())) return "Fecha no disponible";
+      return new Intl.DateTimeFormat("es-AR",{timeZone:"UTC",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(d)+" UTC";
+    };
+    const asUTC = v => {
+      if(!v)return null;
+      const t=String(v).trim().replace(" ","T");
+      const d=new Date(t.endsWith("Z")?t:t+"Z");
+      return Number.isFinite(d.getTime())?d:null;
+    };
+    const level = v => v!=null && String(v).trim()!=="" && Number.isInteger(Number(v)) && Number(v)>=0 && Number(v)<=5 ? Number(v) : null;
+    const showScale = (name, entry, isMax=false) => {
+      const n=level(entry && entry.Scale);
+      if(isMax){
+        $("max-"+name).textContent=n===null?"—":n===0?"Sin evento":name+n;
+        $("maxlabel-"+name).textContent=n===null?"Sin datos":meanings[n];
+        return;
+      }
+      $("current-"+name).textContent=n===null?"—":n===0?"Sin evento":name+n;
+      $("severity-"+name).textContent=n===null?"Dato no disponible":n===0?"Nivel 0 / 5":meanings[n]+" · Nivel "+n+"/5";
+      $("effect-"+name).textContent=n===null?"La última observación no está disponible.":descriptions[name][n];
+      $("card-"+name).dataset.level=n===null?"0":String(n);
+      const bar=$("bars-"+name);bar.replaceChildren();
+      for(let i=1;i<=5;i++){const el=document.createElement("i");if(n!==null && i<=n)el.className="on";bar.appendChild(el)}
+      bar.setAttribute("aria-label","Escala "+name+": "+(n===null?"sin datos":n+" de 5"));
+    };
+    const renderScales = data => {
+      if(!data || typeof data!=="object" || !data["0"] || !data["-1"])throw new Error("Formato de escalas NOAA no válido");
+      for(const k of ["R","S","G"]){showScale(k,data["0"][k]);showScale(k,data["-1"][k],true)}
+      const date=asUTC(String(data["0"].DateStamp||"")+"T"+String(data["0"].TimeStamp||""));
+      $("updated").textContent="Observación NOAA: "+utc(date);
+      if(date && Date.now()-date.getTime()>3*3600000) showError("La última observación NOAA tiene más de 3 horas. Verificá su vigencia antes de usar los datos.");
+      const wrap=$("forecast");wrap.replaceChildren();
+      for(let i=1;i<=3;i++){
+        const e=data[String(i)];
+        if(!e)continue;
+        const row=document.createElement("div");row.className="forecast-day";
+        const d=document.createElement("div");d.className="day";
+        d.textContent=i===1?"Hoy":i===2?"Mañana":"Día 3";
+        const sm=document.createElement("span");sm.className="date-small";sm.textContent=e.DateStamp||"—";d.appendChild(sm);
+        const probs=document.createElement("div");probs.className="probs";
+        const items=[
+          ["R1–R2",e.R&&e.R.MinorProb,"%"],
+          ["R3–R5",e.R&&e.R.MajorProb,"%"],
+          ["S1+",e.S&&e.S.Prob,"%"],
+          ["Geomag.",e.G?level(e.G.Scale):null,"G"]
+        ];
+        for(const it of items){
+          const cell=document.createElement("div");cell.className="prob"+(it[2]==="G"?" glevel":"");
+          const b=document.createElement("b");
+          b.textContent=it[2]==="G"?(it[1]===null?"—":it[1]===0?"Sin evento":"G"+it[1]):(it[1]==null?"—":String(it[1])+"%");
+          const sp=document.createElement("span");sp.textContent=it[0];cell.append(b,sp);probs.appendChild(cell);
+        }
+        row.append(d,probs);wrap.appendChild(row);
+      }
+      if(!wrap.children.length)wrap.textContent="Pronóstico no disponible";
+    };
+    const showError = message => {const b=$("error-banner");b.textContent=message;b.classList.add("show")};
+    const clearError = () => {const b=$("error-banner");b.textContent="";b.classList.remove("show")};
+    async function fetchJson(url){
+      const ctrl=new AbortController();const timeout=setTimeout(()=>ctrl.abort(),12000);
+      try{
+        const r=await fetch(url+"?t="+Date.now(),{signal:ctrl.signal,cache:"no-store"});
+        if(!r.ok)throw new Error("NOAA respondió HTTP "+r.status);
+        return await r.json();
+      }finally{clearTimeout(timeout)}
+    }
+    const renderKp=data=>{
+      if(!Array.isArray(data))throw new Error("Índice Kp no disponible");
+      const all=data.map(x=>({time:asUTC(x.time_tag),v:Number(x.Kp)})).filter(x=>x.time && Number.isFinite(x.v)&&x.v>=0&&x.v<=9).sort((a,b)=>a.time-b.time);
+      const latest=all[all.length-1];if(!latest)throw new Error("Sin datos Kp");
+      $("kp-value").textContent=latest.v.toFixed(2).replace(".",",");
+      $("kp-time").textContent=utc(latest.time);
+      $("kp-last").textContent="Último: "+latest.v.toFixed(2).replace(".",",");
+      const minTime=latest.time.getTime()-48*3600000;const pts=all.filter(x=>x.time.getTime()>=minTime);const svg=$("kp-chart");
+      while(svg.lastChild && svg.lastChild.tagName.toLowerCase()!=="title")svg.lastChild.remove();
+      const ns="http://www.w3.org/2000/svg";
+      const E=(type,attrs,parent=svg,text)=>{
+        const el=document.createElementNS(ns,type);
+        for(const [k,v] of Object.entries(attrs||{}))el.setAttribute(k,String(v));
+        if(text!==undefined)el.textContent=text;
+        parent.appendChild(el);return el;
+      };
+      const left=38,right=643,top=15,bottom=194;
+      const X=t=>left+(t-minTime)/(latest.time.getTime()-minTime||1)*(right-left);
+      const Y=v=>bottom-v/9*(bottom-top);
+      for(const v of [0,3,5,7,9]){
+        const y=Y(v);
+        E("line",{x1:left,y1:y,x2:right,y2:y,stroke:v===5?"#d69c58":"#315069","stroke-width":v===5?1.6:1,"stroke-dasharray":v===5?"5 5":"2 5"});
+        E("text",{x:29,y:y+4,fill:"#88a8be","font-size":11,"text-anchor":"end"},svg,String(v));
+      }
+      const path=pts.map((p,i)=>(i?"L":"M")+X(p.time.getTime()).toFixed(1)+","+Y(p.v).toFixed(1)).join(" ");
+      if(pts.length>1){
+        const area=path+" L"+X(pts[pts.length-1].time.getTime()).toFixed(1)+","+bottom+" L"+X(pts[0].time.getTime()).toFixed(1)+","+bottom+" Z";
+        E("path",{d:area,fill:"#64dac41e"});
+        E("path",{d:path,stroke:"#6fe6d4","stroke-width":3,fill:"none","stroke-linejoin":"round","stroke-linecap":"round"});
+      }
+      for(const p of pts){
+        const x=X(p.time.getTime()),y=Y(p.v);
+        const circle=E("circle",{cx:x,cy:y,r:3.3,fill:p.v>=5?"#ffc078":"#7ae5d4",stroke:"#0c2335","stroke-width":1.5});
+        E("title",{},circle,utc(p.time)+" · Kp "+p.v.toFixed(2));
+      }
+      for(const frac of [0,.25,.5,.75,1]){
+        const d=new Date(minTime+frac*(latest.time.getTime()-minTime));
+        E("text",{x:left+frac*(right-left),y:218,fill:"#8caabd","font-size":11,"text-anchor":frac===0?"start":frac===1?"end":"middle"},svg,new Intl.DateTimeFormat("es-AR",{timeZone:"UTC",day:"2-digit",hour:"2-digit",hour12:false}).format(d)+"Z");
+      }
+      $("chart-empty").hidden=true;
+    };
+    const renderFlux=data=>{
+      const items=Array.isArray(data)?data:[];
+      const values=items.filter(x=>x && Number.isFinite(Number(x.flux))).sort((a,b)=>String(a.time_tag).localeCompare(String(b.time_tag)));
+      const item=values[values.length-1];if(!item)throw new Error("Sin dato F10.7");
+      $("f107-value").textContent=Number(item.flux).toLocaleString("es-AR")+" sfu";
+      $("f107-time").textContent="Última medición: "+utc(asUTC(item.time_tag));
+    };
+    const renderAlerts=data=>{
+      if(!Array.isArray(data))throw new Error("Sin avisos");
+      const entries=data.slice().sort((a,b)=>String(b.issue_datetime||"").localeCompare(String(a.issue_datetime||""))).slice(0,4);
+      const target=$("alerts");target.replaceChildren();
+      if(!entries.length){target.textContent="NOAA no registra mensajes recientes en este producto.";return}
+      for(const x of entries){
+        const msg=String(x.message||"");
+        const title=msg.split(/\r?\n/).map(s=>s.trim()).find(s=>/^(EXTENDED WARNING|CONTINUED ALERT|WARNING|ALERT|WATCH):/i.test(s))||"Mensaje meteorológico espacial";
+        const type=/ALERT/i.test(title)?"ALERTA":/WARNING/i.test(title)?"ADVERTENCIA":/WATCH/i.test(title)?"VIGILANCIA":"MENSAJE";
+        const a=document.createElement("article");a.className="alert";
+        const top=document.createElement("div");top.className="alert-top";
+        const tag=document.createElement("span");tag.className="tag"+(type==="ALERTA"?" alert-level":"");tag.textContent=type;
+        const t=document.createElement("time");t.textContent=utc(asUTC(x.issue_datetime));top.append(tag,t);
+        const p=document.createElement("p");p.textContent=title.slice(0,190);a.append(top,p);target.appendChild(a);
+      }
+    };
+    let loading=false;
+    async function refresh(){
+      if(loading)return;loading=true;$("refresh").disabled=true;$("status").textContent="Actualizando datos NOAA…";
+      $("live-dot").classList.remove("error");clearError();
+      const keys=Object.keys(URLS);
+      const results=await Promise.allSettled(keys.map(k=>fetchJson(URLS[k])));
+      let essentialOk=false;const problems=[];
+      results.forEach((result,i)=>{
+        const key=keys[i];if(result.status!=="fulfilled"){problems.push(key);return}
+        try{
+          if(key==="scales"){renderScales(result.value);essentialOk=true}
+          if(key==="kp")renderKp(result.value);
+          if(key==="flux")renderFlux(result.value);
+          if(key==="alerts")renderAlerts(result.value);
+        }catch(err){problems.push(key)}
+      });
+      if(!essentialOk){
+        $("live-dot").classList.add("error");$("status").textContent="Sin conexión con NOAA";
+        showError("No se pudieron obtener las condiciones NOAA. No se muestran niveles simulados. Reintentá en unos minutos o consultá el sitio oficial.");
+      }else{
+        $("status").textContent=problems.length?"Datos NOAA · Parciales":"Datos NOAA · Actualizados";
+        if(problems.length)showError("Algunos productos auxiliares no están disponibles ("+problems.join(", ")+"). Se conserva la información recibida.");
+      }
+      $("refresh").disabled=false;loading=false;
+    }
+    $("refresh").addEventListener("click",refresh);
+    for(const k of ["R","S","G"])showScale(k,null);
+    refresh();
+    setInterval(()=>{if(!document.hidden)refresh()},5*60*1000);
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
+  })();
+  </script>
+</body>
+</html>
