@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#123b70">
-  <meta name="description" content="Visualizador de Datos Meteorológicos: METAR, SPECI y TAF, análisis SYNOP y meteorología espacial NOAA/SWPC.">
+  <meta name="description" content="Visualizador de Datos Meteorológicos: METAR, SPECI y TAF, análisis SYNOP, meteorología espacial NOAA/SWPC y bloqueos atmosféricos.">
   <title>Visualizador de Datos Meteorológicos · Inicio</title>
   <link rel="icon" type="image/png" sizes="128x128" href="favicon.png">
   <style>
@@ -28,7 +28,7 @@
     main{padding-top:30px;padding-bottom:56px}
     h2{margin:0;color:#183952;font-size:20px}
     .section-sub{margin:5px 0 21px;color:var(--muted);font-size:13px}
-    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:19px}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:19px}
     .tool-card{display:flex;flex-direction:column;min-width:0;min-height:410px;overflow:hidden;border-radius:15px;background:#fff;border:1px solid var(--line);box-shadow:0 5px 20px #122b410d;text-decoration:none;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
     .tool-card:hover{transform:translateY(-3px);border-color:#8eb5d5;box-shadow:0 12px 24px #153b5c1c}
     .illustration{height:143px;position:relative;overflow:hidden;display:grid;place-items:center;border-bottom:1px solid #d5e3ee}
@@ -49,7 +49,7 @@
     .note p{font-size:12px;color:#577185;margin:0}
     footer{border-top:1px solid var(--line);padding:19px 0 30px;color:#647b8e;font-size:12px}
     .foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
-    @media(max-width:950px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tool-card{min-height:390px}}
+    @media(max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tool-card{min-height:390px}}
     @media(max-width:650px){.shell{padding:0 14px}.head{padding-top:15px;padding-bottom:15px}.shield{width:54px;height:54px;flex-basis:54px}.head p{font-size:11px}.intro{padding:30px 0}.intro p{font-size:13px}.grid{grid-template-columns:1fr}.tool-card{min-height:0}.illustration{height:135px}.card-content{padding:18px}.open{padding-top:20px}main{padding-top:23px}.note{align-items:flex-start}}
     @media(prefers-reduced-motion:reduce){.tool-card{transition:none}}
   </style>
@@ -69,13 +69,13 @@
     <div class="shell">
       <div class="eyebrow">Portal de visualización meteorológica</div>
       <h1>Observaciones y condiciones para el análisis meteorológico</h1>
-      <p>Seleccioná el visualizador que necesitás. Desde cada herramienta podés regresar a esta página principal para acceder a las demás.</p>
+      <p>Seleccioná el visualizador que necesitás.</p>
     </div>
   </section>
 
   <main class="shell" id="visualizadores">
     <h2>Visualizadores disponibles</h2>
-    <p class="section-sub">Tres herramientas complementarias, organizadas en un mismo portal.</p>
+    <p class="section-sub">Cuatro herramientas complementarias, organizadas en un mismo portal.</p>
 
     <div class="grid">
       <a class="tool-card" href="metar.html" aria-label="Abrir visualizador METAR y TAF">
@@ -196,9 +196,29 @@
           <span class="open">Abrir visualizador <span class="arrow" aria-hidden="true">→</span></span>
         </div>
       </a>
+
+      <a class="tool-card" href="https://mauricionico.github.io/productosMetCloud/visor-bloqueos/" aria-label="Abrir monitoreo de bloqueos atmosféricos">
+        <div class="illustration synop" aria-hidden="true">
+          <svg viewBox="0 0 380 145" preserveAspectRatio="xMidYMid slice">
+            <g fill="none" stroke="#699bb7" stroke-width="2">
+              <path d="M-10 18 Q90 0 138 43 T236 48 T390 17"/>
+              <path d="M-10 39 Q86 19 135 71 T238 72 T390 40"/>
+              <path d="M-10 67 Q85 44 128 101 T243 100 T390 68"/>
+              <path d="M-10 96 Q78 70 119 124 T250 125 T390 94"/>
+            </g>
+          </svg>
+        </div>
+        <div class="card-content">
+          <span class="card-meta">Análisis en 500 hPa</span>
+          <h3>Bloqueos atmosféricos</h3>
+          <p>Compará las corridas GFS y ECMWF y consultá dónde aparece una señal de bloqueo y cuánto tiempo se prevé que persista.</p>
+          <div class="features"><span>Z500</span><span>GHGN / GHGS</span><span>Persistencia</span></div>
+          <span class="open">Abrir monitor <span class="arrow" aria-hidden="true">→</span></span>
+        </div>
+      </a>
     </div>
   </main>
 
-  <footer><div class="shell foot"><span>Visualizador de Datos Meteorológicos</span><span>METAR y TAF · SYNOP · Meteorología espacial</span></div></footer>
+  <footer><div class="shell foot"><span>Visualizador de Datos Meteorológicos</span><span>METAR y TAF · SYNOP · Meteorología espacial · Bloqueos atmosféricos</span></div></footer>
 </body>
 </html>
